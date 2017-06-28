@@ -12,8 +12,8 @@ data {
   vector<lower=0, upper=1>[N] p;  //pr(WP|Evg)
 }
 parameters {
-  cholesky_factor_corr[L] L_Omega[2]; //covariance matrix for Y1 & Y2 from nu
-  vector<lower=0>[L] L_sigma[2];  //covariance matrix for Y1 & Y2 from nu
+  cholesky_factor_corr[L] L_Omega[2]; //covariance matrix for Y1 & Y2
+  vector<lower=0>[L] L_sigma[2];  //covariance matrix for Y1 & Y2
   row_vector<lower=0, upper=1>[L] nu[N];  //latent LC proportions
   vector[nB_d[1]] beta_d1;
   vector[nB_d[2]] beta_d2;
