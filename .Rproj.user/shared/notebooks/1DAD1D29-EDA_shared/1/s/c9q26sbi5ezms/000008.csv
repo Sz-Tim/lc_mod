@@ -1,0 +1,2 @@
+"0","cond.lc <- ggplot(fia.5y) + geom_bar() + facet_wrap(~nconds)"
+"0","cond.lc + aes(x=fia.LC) + xlab(""FIA"")"

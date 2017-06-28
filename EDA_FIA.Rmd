@@ -1,0 +1,189 @@
+---
+title: "FIA Exploration"
+author: "Tim Szewczyk"
+date: "6/13/2017"
+output: html_document
+---
+
+```{r setEnv, message=FALSE, echo=FALSE}
+library(sevcheck); library(tidyverse); library(forcats)
+theme_set(theme_bw())
+theme_update(axis.text=element_text(size=12), axis.title=element_text(size=13),
+             axis.text.x=element_text(angle=300, hjust=0, vjust=1))
+fia.5y <- read_csv("../GIS/out/fia_2011-2015.csv")
+nlcd.i <- read_csv("../GIS/out/nlcd_i.csv")
+grnt.i <- read_csv("../GIS/out/grnt_i.csv")
+```
+
+```{r LC.agg}
+# NLCD aggregation
+nlcd.i
+
+# GRANIT aggregation
+grnt.i
+```
+
+
+```{r writeData, eval=FALSE, message=FALSE}
+# load data
+fia.df <- read_csv("data/plotsummary_forafri.csv", na=c("-9999", ""))
+fia.5y <- fia.df %>% filter(measyr %in% 2011:2015)
+
+# define LC based on GRANIT
+fia.5y <- fia.5y %>% 
+  mutate(prop_conifer=conifer_ba/ba,
+         prop_wp_conifer=wp_ba/conifer_ba)
+fia.5y$LC <- NA
+grnt_lc_def <- function(prop_conifer, dominant_conifer) {
+  if(prop_conifer < 0.25) {
+    return("Hwd")
+  } else if (prop_conifer < 0.65) {
+    return("Mxd")
+  } else if(dominant_conifer == 129) {
+    return("WP")
+  } else {
+    return("Evg")
+  }
+}
+for(i in 1:nrow(fia.5y)) {
+  fia.5y$LC[i] <- grnt_lc_def(max(fia.5y$prop_conifer[i], 0, na.rm=TRUE), 
+                                 fia.5y$dominant_conifer[i])
+}
+fia.5y$nlcd.Agg <- nlcd.i$LC.Agg[match(fia.5y$nlcd.LC, nlcd.i$Value)]
+fia.5y$grnt.Agg <- grnt.i$LC.Agg[match(fia.5y$grnt.LC, grnt.i$Value)]
+fia.5y$fia.LC <- factor(fia.5y$fia.LC, 
+                        levels=c("Deciduous", "Mixed", "Evergreen", "White Pine"), 
+                        labels=c("Hwd", "Mxd", "Evg", "WP"))
+write.csv(fia.5y, "../GIS/out/fia_2011-2015.csv")
+write.csv(fia.5y, "data/FIA_2011-2015.csv", row.names=FALSE)
+```
+
+# FIA: Relative abundance of tree types  
+```{r fia_ba, message=FALSE}
+fia.p <- ggplot(fia.5y, aes(x=lon, y=lat))
+fia.p + aes(colour=ba) + geom_point() + ggtitle("Total basal area")
+fia.p + aes(colour=conifer_ba/ba) + geom_point() + 
+  ggtitle("Proportion conifer basal area of total basal area")
+fia.p + aes(colour=wp_ba/ba) + geom_point() + 
+  ggtitle("Proportion White Pine basal area of total basal area")
+fia.p + aes(colour=wp_ba/conifer_ba) + geom_point() + 
+  ggtitle("Proportion White Pine basal area of conifer basal area")
+```
+
+# FIA: Land cover
+```{r fia_lc}
+fia.p + aes(colour=fia.LC) + geom_point() + 
+  scale_colour_manual(values=c("#b2df8a", "#00af00", "#356b35", "orange")) +
+  ggtitle("Forest type using GRANIT definitions")
+```
+
+# FIA vs GRANIT
+```{r fia_grnt}
+ggplot(filter(fia.5y, !is.na(grnt.Agg)), aes(x=grnt.Agg)) + geom_bar() + 
+  facet_wrap(~fia.LC) + xlab("GRANIT") + ggtitle("Panes: FIA")
+```
+
+# FIA vs NLCD
+```{r fia_nlcd}
+ggplot(fia.5y, aes(x=nlcd.Agg)) + geom_bar() + facet_wrap(~fia.LC) +
+  xlab("NLCD") + ggtitle("Panes: FIA")
+```
+
+# Number of conditions
+```{r fia_cond, warning=FALSE}
+# Number and proportion of plots by condition number
+fia.5y %>% group_by(nconds) %>% 
+  summarise(nPlots=n(), propPlots=round(n()/nrow(fia.5y),2))
+# Number of plots by condition number and FIA LC
+xtabs(~nconds + fia.LC, data=fia.5y)
+# Proportion of plots by condition number and FIA LC
+xtabs(~nconds + fia.LC, data=fia.5y) %>% prop.table(margin=1)
+xtabs(~nconds + fia.LC, data=fia.5y) %>% prop.table(margin=2)
+
+ggplot(fia.5y, aes(x=lon, y=lat, colour=factor(nconds))) + geom_point() +
+  scale_colour_manual("nConditions", values=c("gray80", "gray60", "black"))
+
+# As expected, plots with conditions seem to be more likely to be 
+# identified as Mixed. Separating by condition would probably partition these
+# into Evg vs Hwd vs WP more. 
+ggplot(fia.5y, aes(x=fia.LC)) + geom_bar() + facet_wrap(~nconds)
+ggplot(fia.5y, aes(x=grnt.Agg)) + geom_bar() + facet_wrap(~nconds)
+ggplot(fia.5y, aes(x=nlcd.Agg)) + geom_bar() + facet_wrap(~nconds)
+cond.dens <- ggplot(fia.5y, aes(colour=factor(nconds))) + geom_density() +
+  scale_colour_manual("nConditions", values=c("gray80", "gray60", "black"))
+cond.dens + aes(x=ba) + xlab("Total basal area")
+cond.dens + aes(x=prop_conif) + xlab("Proportion Evg basal area")
+cond.dens + aes(x=wp_ba/ba) + xlab("Proportion WP of total basal area")
+cond.dens + aes(x=prop_wp_co) + xlab("Proportion WP of Evg basal area")
+```
+
+# Spatial regression
+```{r gwr, fig.height=6, fig.width=5}
+library(spgwr)
+fia.5y$fia.LC.f <- factor(fia.5y$fia.LC)
+gwr.df <- fia.5y %>% filter(!is.na(prop_wp_co)) %>%
+  filter(!is.na(prop_conif)) %>%
+  filter(!is.na(canopyProp)) %>%
+  filter(!is.na(elev))
+mod1 <- lm(asin(sqrt(gwr.df$prop_wp_co)) ~ prop_conif + canopyProp + grnt.Agg + elev + I(elev^2), data=gwr.df)
+resids <- residuals(mod1)
+colours <- c("dark blue", "blue", "red", "dark red") 
+resid.df <- data.frame(resids=resids, x=gwr.df$lon, y=gwr.df$lat)
+map.resids <- SpatialPointsDataFrame(data=data.frame(resids), 
+                                     coords=gwr.df[,c("lon", "lat")])
+spplot(map.resids, cuts=quantile(resids), col.regions=colours, cex=1)
+
+
+GWRbandwidth <- gwr.sel(mod1$call, data=gwr.df, coords=cbind(gwr.df$lon, gwr.df$lat), adapt=T)
+
+gwr.mod <- gwr(mod1$call, data=gwr.df, coords=cbind(gwr.df$lon, gwr.df$lat), 
+               adapt=GWRbandwidth, hatmatrix=TRUE, se.fit=TRUE)
+out <- as.data.frame(gwr.mod$SDF)
+
+gwr.df$coef.pConif <- out$prop_conif
+gwr.df$coef.canopy <- out$canopyProp
+gwr.df$coef.elev <- out$elev
+gwr.df$coef.elev2 <- out$I.elev.2.
+gwr.df$coef.Evg <- out$grnt.AggEvg
+gwr.df$coef.Hwd <- out$grnt.AggHwd
+gwr.df$coef.Mxd <- out$grnt.AggMxd
+gwr.df$coef.Other <- out$grnt.AggOther
+gwr.df$pred <- (sin(out$pred))^2
+gwr.df$gwr.e <- out$gwr.e
+
+gwr.plot <- ggplot(gwr.df, aes(x=lon, y=lat)) + 
+  geom_point(shape=21, colour="gray") + scale_fill_gradient2()
+gwr.plot + aes(fill=coef.canopy)
+gwr.plot + aes(fill=coef.pConif)
+gwr.plot + aes(fill=coef.elev)
+gwr.plot + aes(fill=coef.elev2)
+gwr.plot + aes(fill=coef.Evg)
+gwr.plot + aes(fill=coef.Hwd)
+gwr.plot + aes(fill=coef.Mxd)
+gwr.plot + aes(fill=coef.Other)
+gwr.plot + aes(fill=pred)
+gwr.plot + aes(fill=pred-prop_wp_co)
+gwr.plot + aes(fill=gwr.e)
+```
+
+# geoR and geoRGLM
+```{r geoRglm, message=FALSE, warning=FALSE}
+library(geoRglm)
+geo.df <- fia.5y %>% filter(!is.na(prop_wp_co)) %>%
+  filter(!is.na(prop_conif)) %>%
+  filter(!is.na(canopyProp)) %>%
+  filter(!is.na(elev)) %>%
+  select(lon, lat, fia.LC, prop_wp_co, prop_conif, canopyProp, elev) %>%
+  as.geodata(coords.col=1:2, covar.col=4:5, 
+             cov.model="exponential", nugget=0, kappa=0.5)
+# plot(geo.df, trend=~prop_conif+canopyProp+elev)
+# variog(geo.df, trend=~prop_conif+canopyProp+elev) %>% plot
+model2 <- krige.glm.control(cov.pars=c(1,1), beta=1) 
+test2.tune <- pois.krige(p50, krige=model2, mcmc.input=list(S.scale=0.2, thin=1))
+data(p50)
+test2.tune <- pois.krige(geo.df, krige=model2, coords=geo.df[[1]],
+                         mcmc.input=list(S.scale = 0.5, thin=1))
+plot(log(test2.tune$intensity[45,]), type="l")
+acf(log(test2.tune$intensity[45,]), type="correlation", plot=TRUE)
+```
+

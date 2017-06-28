@@ -1,0 +1,135 @@
+"0","nCell <- 50
+nLC <- 6
+s2.grnt <- 0.001
+s2.nlcd <- s2.grnt
+cov.grnt <- cov(GRNT)
+cell.samp <- sample(1:nrow(GRNT), nCell)
+## generate data
+# nu <- GRNT[cell.samp,] %>% c
+# Y.grnt <- nu + rnorm(nCell, 0, sqrt(s2.grnt))
+# Y.nlcd <- nu + rnorm(nCell, 0, sqrt(s2.nlcd))
+# d_SB1.1 <- list(N=length(nu), Y1=Y.grnt, Y2=Y.nlcd)
+# out <- stan(file=""mod_sandbox/veg_SB1_1.stan"", data=d_SB1.1)
+nu <- GRNT[cell.samp,]
+Y.grnt <- nu; Y.nlcd <- nu
+for(i in 1:nCell) {
+  Y.grnt[i,] <- rmvnorm(1, nu[i,], cov.grnt) %>% w_to_eta(a=0.5)
+  Y.nlcd[i,] <- rmvnorm(1, nu[i,], cov.grnt) %>% w_to_eta(a=0.5)
+}
+plot(Y.grnt, Y.nlcd); plot(nu, Y.grnt); plot(nu, Y.nlcd)
+"
+"0","d_SB1.2 <- list(N=nrow(nu), L=ncol(nu), Y1=Y.grnt, Y2=Y.nlcd)"
+"0","out <- stan(file=""mod_sandbox/veg_SB1_2.stan"", data=d_SB1.2, thin=50)"
+"2","hash mismatch so recompiling; make sure Stan code ends with a blank line
+"
+"1","Iteration:  400 / 2000 [ 20%]  (Warmup)
+"
+"1","Iteration:  400 / 2000 [ 20%]  (Warmup)"
+"1","
+"
+"1","Iteration:  400 / 2000 [ 20%]  (Warmup)"
+"1","
+"
+"1","Iteration:  400 / 2000 [ 20%]  (Warmup)"
+"1","
+"
+"1","In file included from filea5870a2de77.cpp:8:
+"
+"1","In file included from /Library/Frameworks/R.framework/Versions/3.3/Resources/library/StanHeaders/include/src/stan/model/model_header.hpp:4:
+"
+"1","In file included from /Library/Frameworks/R.framework/Versions/3.3/Resources/library/StanHeaders/include/stan/math.hpp:4:
+"
+"1","In file included from /Library/Frameworks/R.framework/Versions/3.3/Resources/library/StanHeaders/include/stan/math/rev/mat.hpp:4:
+"
+"1","In file included from /Library/Frameworks/R.framework/Versions/3.3/Resources/library/StanHeaders/include/stan/math/rev/core.hpp:12:
+"
+"1","In file included from /Library/Frameworks/R.framework/Versions/3.3/Resources/library/StanHeaders/include/stan/math/rev/core/gevv_vvv_vari.hpp:5:
+"
+"1","In file included from /Library/Frameworks/R.framework/Versions/3.3/Resources/library/StanHeaders/include/stan/math/rev/core/var.hpp:7:
+"
+"1","In file included from /Library/Frameworks/R.framework/Versions/3.3/Resources/library/BH/include/boost/math/tools/config.hpp:13:
+"
+"1","In file included from /Library/Frameworks/R.framework/Versions/3.3/Resources/library/BH/include/boost/config.hpp:39:
+"
+"1","/Library/Frameworks/R.framework/Versions/3.3/Resources/library/BH/include/boost/config/compiler/clang.hpp:196:11: warning: 'BOOST_NO_CXX11_RVALUE_REFERENCES' macro redefined [-Wmacro-redefined]
+"
+"1","#  define BOOST_NO_CXX11_RVALUE_REFERENCES
+"
+"1","          ^
+"
+"1","<command line>:6:9: note: previous definition is here
+"
+"1","#define BOOST_NO_CXX11_RVALUE_REFERENCES 1
+"
+"1","        ^
+"
+"1","1 warning generated.
+"
+"1","ld: warning: directory not found for option '-L/usr/local/opt/gettext/lib'
+"
+"1","starting worker pid=5669 on localhost:11955 at 13:33:26.227
+"
+"1","starting worker pid=5684 on localhost:11955 at 13:33:26.648
+"
+"1","starting worker pid=5692 on localhost:11955 at 13:33:27.059
+"
+"1","starting worker pid=5700 on localhost:11955 at 13:33:27.462
+"
+"1","
+"
+"1","SAMPLING"
+"1"," FOR MODEL 'veg_SB1_2' NOW (CHAIN 1).
+
+Gradient evaluation took 0.001028 seconds
+1000 transitions using 10 leapfrog steps per transition would take 10.28 seconds.
+Adjust your expectations accordingly!
+
+
+"
+"1","Iteration:    1 / 2000 [  0%]  (Warmup)"
+"1","
+"
+"1","
+SAMPLING FOR MODEL 'veg_SB1_2' NOW (CHAIN 2).
+"
+"1","
+"
+"1","Gradient evaluation took 0.001021 seconds
+1000 transitions using 10 leapfrog steps per transition would take 10.21 seconds."
+"1","
+Adjust your expectations accordingly!
+
+"
+"1","
+"
+"1","Iteration:    1 / 2000 [  0%]  (Warmup)
+"
+"1","
+SAMPLING FOR MODEL 'veg_SB1_2' NOW (CHAIN 3"
+"1",").
+"
+"1","
+"
+"1","Gradient evaluation took 0.001111 seconds
+1000 transitions using 10 leapfrog steps per transition would take 11.11 seconds.
+Adjust your expectations accordingly!
+
+
+"
+"1","Iteration:    1 / 2000 [  0%]  (Warmup)
+"
+"1","
+SAMPLING FOR MODEL 'veg_SB1_2' NOW (CHAIN 4).
+"
+"1","
+"
+"1","Gradient evaluation took 0.001009 seconds
+1000 transitions using 10 leapfrog steps per transition would take 10.09 seconds.
+Adjust your expectations accordingly!
+
+
+"
+"1","Iteration:    1 / 2000 [  0%]  (Warmup)
+"
+"2","
+"

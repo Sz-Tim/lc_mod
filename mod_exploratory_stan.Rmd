@@ -1,0 +1,239 @@
+---
+title: "Veg Mod Exploration: stan"
+author: "Tim Szewczyk"
+date: "6/13/2017"
+output: html_document
+---
+
+```{r setEnv, echo=FALSE, message=FALSE}
+library(sevcheck); library(magrittr); library(tidyverse); theme_set(theme_bw())
+library(forcats); library(rstan); library(ggmcmc); library(mvtnorm)
+rstan_options(auto_write = TRUE)
+options(mc.cores = parallel::detectCores())
+
+w_to_eta <- function(w, a=0.95) {
+  eta <- w[-length(w)]
+  eta[eta < 0] <- 0
+  w.pred <- sum((eta<1)*eta + (eta>1))
+  if(w.pred > a) {
+    D.i <- (1 - (1-a)^(w.pred/a)) / w.pred
+    eta <- D.i*eta
+  }
+  return(c(eta, 1-sum(eta)))
+}
+
+Z_Y_trans <- function(Z.v, g=2) {
+  Z.v[Z.v<0] <- 0
+  Z.l <- length(Z.v) - 1
+  if(Z.v[Z.l]==0) { Z.v[Z.l] <- 0.01 }
+  c((Z.v[1:Z.l]^g)/(1 + sum(Z.v[1:Z.l]^g)),
+    1/(1 + sum(Z.v[1:Z.l]^g)))
+}
+```
+
+# Read in data
+```{r rdData}
+# data from test grid (1-acre composition)
+GRNT <- read.csv("data/t_y_mx.csv") %>% as.matrix
+NLCD <- read.csv("data/t_x_mx.csv") %>% as.matrix
+FIA <- runif(nrow(GRNT), 0, 1)
+
+# Rearrange LC's
+# t_mx order: [Dev, Evg, Hwd, Mxd, Other, WP]
+GRNT <- GRNT[,c(1,5,3,4,2,6)]
+NLCD <- NLCD[,c(1,5,3,4,2)]
+```
+
+
+```{r stan.test}
+schools_dat <- list(J = 8, 
+                    y = c(28,  8, -3,  7, -1,  1, 18, 12),
+                    sigma = c(15, 10, 16, 11,  9, 11, 10, 18))
+
+fit <- stan(file = 'mod_sandbox/8schools.stan', data = schools_dat, 
+            iter = 1000, chains = 4)
+print(fit)
+plot(fit)
+pairs(fit, pars = c("mu", "tau", "lp__"))
+
+la <- extract(fit, permuted = TRUE) # return a list of arrays 
+mu <- la$mu 
+
+### return an array of three dimensions: iterations, chains, parameters 
+a <- extract(fit, permuted = FALSE) 
+
+### use S3 functions as.array (or as.matrix) on stanfit objects
+a2 <- as.array(fit)
+m <- as.matrix(fit)
+print(fit, digits = 1)
+```
+```{r stan.test2}
+y <- as.matrix(read.table('https://raw.github.com/wiki/stan-dev/rstan/rats.txt', header = TRUE))
+x <- c(8, 15, 22, 29, 36)
+xbar <- mean(x)
+N <- nrow(y)
+T <- ncol(y)
+rats_fit <- stan(file = 'https://raw.githubusercontent.com/stan-dev/example-models/master/bugs_examples/vol1/rats/rats.stan')
+```
+```{r stan.test3}
+library(RColorBrewer)
+#simulate some data
+set.seed(20161110)
+N<-100 #sample size
+J<-10 #number of plant species
+id<-rep(1:J,each=10) #index of plant species
+K<-3 #number of regression coefficients
+#population-level regression coefficient
+gamma<-c(2,-1,3)
+#standard deviation of the group-level coefficient
+tau<-c(0.3,2,1)
+#standard deviation of individual observations
+sigma<-1
+#group-level regression coefficients
+beta<-mapply(function(g,t) rnorm(J,g,t),g=gamma,t=tau) 
+#the model matrix
+X<-model.matrix(~x+y,data=data.frame(x=runif(N,-2,2),y=runif(N,-2,2)))
+y<-vector(length = N)
+for(n in 1:N){
+  #simulate response data
+  y[n]<-rnorm(1,X[n,]%*%beta[id[n],],sigma)
+}
+#run the model
+m_hier<-stan(file="mod_sandbox/rblog.stan",data=list(N=N,J=J,K=K,id=id,X=X,y=y))
+m_hier
+```
+```{r stan.test4}
+K <- 6
+J <- 3
+N <- 10
+x <- matrix(runif(N*J), nrow=N, ncol=J)
+beta.t <- matrix(runif(K*J), nrow=K, ncol=J)
+Sigma.t <- diag(0.1, K, K)
+mu <- matrix(nrow=N, ncol=K)
+y <- matrix(nrow=N, ncol=K)
+for(n in 1:N) {
+  mu[n,] <- beta.t %*% x[n,]
+  y[n,] <- rmvnorm(1, mu[n,], Sigma.t)
+}
+
+d_t4 <- list(K=K, J=J, N=N, x=x, y=y)
+out <- stan(file="mod_sandbox/mv_examp.stan", data=d_t4, cores=4)
+
+gg.mu <- ggs(out, "mu") %>% arrange(Parameter, Chain, Iteration)
+nGG <- attr(gg.mu, "nChains")*attr(gg.mu, "nIterations")
+gg.mu$mu.true <- t(mu) %>% c %>% rep(each=nGG)
+ggplot(gg.mu, aes(x=mu.true, y=value)) + geom_abline(slope=1, linetype=2) +
+  geom_point(alpha=0.01) 
+```
+
+
+# Simplest version
+```{r mod.simp}
+# simulate data
+## set parameters
+nCell <- 20
+nLC <- 6
+s2.grnt <- 0.001
+s2.nlcd <- s2.grnt
+cov.grnt <- cov(GRNT)
+# cov.grnt <- diag(s2.grnt, nLC, nLC)
+cell.samp <- sample(1:nrow(GRNT), nCell)
+
+## generate data
+nu <- GRNT[cell.samp,]
+Y.grnt <- nu; Y.nlcd.dp <- nu
+for(i in 1:nCell) {
+  Y.grnt[i,] <- rmvnorm(1, nu[i,], cov.grnt) 
+  Y.nlcd.dp[i,] <- rmvnorm(1, nu[i,], cov.grnt) 
+}
+plot(Y.grnt, Y.nlcd.dp); plot(nu, Y.grnt); plot(nu, Y.nlcd.dp)
+d_SB1.2 <- list(N=nrow(nu), L=ncol(nu), Y1=Y.grnt, Y2=Y.nlcd.dp)
+out <- stan(file="mod_sandbox/veg_SB1_2.stan", data=d_SB1.2, thin=50)
+
+gg.nu <- ggs(out, "nu") %>% arrange(Parameter, Chain, Iteration)
+nGG <- attr(gg.nu, "nChains")*attr(gg.nu, "nIterations")
+gg.nu$nu.true <- t(nu) %>% c %>% rep(each=nGG)
+gg.nu$LC <- 1:6 %>% rep(each=nGG) %>% rep(times=nCell)
+ggplot(gg.nu, aes(x=nu.true, y=value)) + geom_abline(slope=1, linetype=2) +
+  geom_point(alpha=0.02) + facet_wrap(~LC, scales="free")
+```
+
+
+```{r}
+# simulate data
+## set parameters
+nCell <- 50
+nLC <- 6
+s2.grnt <- 0.001
+s2.nlcd <- s2.grnt
+# cov.grnt <- cov(GRNT)
+cov.grnt <- diag(s2.grnt, nLC, nLC)
+cov.nlcd <- cov.grnt
+nB.d <- 2
+nB.p <- 2
+X.d <- runif(nCell*nB.d, -1, 1) %>% matrix(nrow=nCell)
+X.p <- runif(nCell*nB.p, -1, 1) %>% matrix(nrow=nCell)
+B.d <- runif((nLC-1)*nB.d, -0.5, 0.5) %>% matrix(nrow=nB.d)
+# B.d <- matrix(0, nrow=nB.d, ncol=nLC-1)
+B.p <- runif(nLC*nB.p, -1, 1) %>% matrix(nrow=nB.p)
+
+nu <- GRNT[sample(1:nrow(GRNT), nCell),]
+Y1 <- nu; Y2.ds <- Y1
+p <- nu[,6]/(nu[,5]+nu[,6]+0.0001) + rnorm(nCell, 0, 0.005)
+p[p>1] <- 1; p[p<0] <- 0
+
+# GRNT, eta
+for(i in 1:nCell) {
+  Y1[i,] <- rmvnorm(1, nu[i,], cov.grnt)
+  Y2.ds[i,] <- rmvnorm(1, nu[i,], cov.nlcd)
+}
+
+# combine WP + Evg
+Y2.d <- cbind(Y2.ds[,1:4], Y2.ds[,5] + Y2.ds[,6])
+
+# add bias
+d <- X.d %*% B.d
+Y2 <- Y2.d - d
+
+
+
+## run model
+d_SB1.5 <- list(N=nrow(nu), L=ncol(nu), Y1=Y1, Y2=Y2, p=p, nB_d=2, X_d=X.d)
+out <- stan(file="mod_sandbox/veg_SB1_5.stan", data=d_SB1.5, thin=50, init=0)
+
+
+
+## visualize
+gg.nu <- ggs(out, "nu") %>% arrange(Parameter, Chain, Iteration)
+nGG <- attr(gg.nu, "nChains")*attr(gg.nu, "nIterations")
+gg.nu$nu.true <- t(nu) %>% c %>% rep(each=nGG)
+gg.nu$LC <- 1:6 %>% rep(each=nGG) %>% rep(times=nCell)
+ggplot(gg.nu, aes(x=nu.true, y=value)) + geom_abline(slope=1, linetype=2) +
+  geom_point(alpha=0.1) + facet_wrap(~LC)
+
+gg.Bd <- ggs(out, "beta_d") %>% arrange(Parameter, Chain, Iteration)
+gg.Bd$LC <- rep(1:5, each=nGG) %>% rep(nB.d)
+gg.Bd$Bd.true <- t(B.d) %>% c %>% rep(each=nGG)
+ggplot(gg.Bd, aes(x=Bd.true, y=value)) + geom_abline(slope=1, linetype=3) +
+  geom_point(alpha=0.1)
+
+
+## RMSE
+nu2 <- cbind(nu[,1:4], rowSums(nu[,5:6]))
+Y1.rmse <- ((nu - Y1)^2) %>% colMeans %>% sqrt
+Y2.rmse <- ((nu2 - Y2)^2) %>% colMeans %>% sqrt
+gg.nu %>% group_by(LC) %>% mutate(sdev=(nu.true-value)^2) %>%
+  summarise(mod.rmse=mean(sdev) %>% sqrt %>% round(3)) %>%
+  mutate(Y1.rmse=round(Y1.rmse,3),
+         Y2.rmse=c(round(Y2.rmse,3), NA),
+         diff.Y1=round(mod.rmse-Y1.rmse, 3), 
+         propDiff.Y1=round(diff.Y1/Y1.rmse,3))
+```
+
+
+
+
+
+
+
+

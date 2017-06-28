@@ -1,0 +1,2 @@
+"0","# NLCD"
+"0","nlcd.i %>% select(LC.Full, LC.Agg) %>% arrange(LC.Agg, LC.Full)"

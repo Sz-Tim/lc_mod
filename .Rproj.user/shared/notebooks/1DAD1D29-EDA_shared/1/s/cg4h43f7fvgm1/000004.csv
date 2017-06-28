@@ -1,0 +1,3 @@
+"0","map.df <- fia.5y %>% gather(LC.Source, LC.Value, c(44,48,49))"
+"0","ggplot(map.df, aes(x=lon, y=lat, colour=LC.Value)) + geom_point() +"
+"0","  facet_wrap(~LC.Source) + scale_colour_manual(""LC"", values=lc.cols)"

@@ -1,0 +1,4 @@
+"0","fia.5y %>% select(tpa, ba, qmd, netbdft, grosscuft, netcuft, sward) %>% "
+"0","  mutate(t_tpa=log(tpa), t_qmd=log(qmd)) %>%"
+"0","  pairs(upper.panel=panel.cor, col=rgb(0,0,0,0.1),"
+"0","        main=""Plot totals: All trees"")"

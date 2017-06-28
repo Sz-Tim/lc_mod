@@ -1,0 +1,8 @@
+"0","# data from test grid (1-acre composition)"
+"0","GRNT <- read.csv(""data/t_y_mx.csv"") %>% as.matrix"
+"0","NLCD <- read.csv(""data/t_x_mx.csv"") %>% as.matrix"
+"0","FIA <- runif(nrow(GRNT), 0, 1)"
+"0","# Rearrange LC's"
+"0","# t_mx order: [Dev, Evg, Hwd, Mxd, Other, WP]"
+"0","GRNT <- GRNT[,c(1,5,3,4,2,6)]"
+"0","NLCD <- NLCD[,c(1,5,3,4,2)]"

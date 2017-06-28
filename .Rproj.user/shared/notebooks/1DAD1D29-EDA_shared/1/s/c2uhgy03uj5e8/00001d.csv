@@ -1,0 +1,2 @@
+"0","cond.dens + aes(x=prop_wp_co) + xlab(""Proportion WP of Evg basal area"") +"
+"0","  facet_wrap(~fia.LC)"

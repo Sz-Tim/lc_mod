@@ -1,0 +1,66 @@
+"0","mod <- stan(file=""mod_sandbox/veg_SB1.stan"", data=d_SB1)
+"
+"1","In file included from filef7163b2e058.cpp:8:
+"
+"1","In file included from /Library/Frameworks/R.framework/Versions/3.3/Resources/library/StanHeaders/include/src/stan/model/model_header.hpp:4:
+"
+"1","In file included from /Library/Frameworks/R.framework/Versions/3.3/Resources/library/StanHeaders/include/stan/math.hpp:4:
+"
+"1","In file included from /Library/Frameworks/R.framework/Versions/3.3/Resources/library/StanHeaders/include/stan/math/rev/mat.hpp:4:
+"
+"1","In file included from /Library/Frameworks/R.framework/Versions/3.3/Resources/library/StanHeaders/include/stan/math/rev/core.hpp:12:
+"
+"1","In file included from /Library/Frameworks/R.framework/Versions/3.3/Resources/library/StanHeaders/include/stan/math/rev/core/gevv_vvv_vari.hpp:5:
+"
+"1","In file included from /Library/Frameworks/R.framework/Versions/3.3/Resources/library/StanHeaders/include/stan/math/rev/core/var.hpp:7:
+"
+"1","In file included from /Library/Frameworks/R.framework/Versions/3.3/Resources/library/BH/include/boost/math/tools/config.hpp:13:
+"
+"1","In file included from /Library/Frameworks/R.framework/Versions/3.3/Resources/library/BH/include/boost/config.hpp:39:
+"
+"1","/Library/Frameworks/R.framework/Versions/3.3/Resources/library/BH/include/boost/config/compiler/clang.hpp:196:11: warning: 'BOOST_NO_CXX11_RVALUE_REFERENCES' macro redefined [-Wmacro-redefined]
+"
+"1","#  define BOOST_NO_CXX11_RVALUE_REFERENCES
+"
+"1","          ^
+"
+"1","<command line>:6:9: note: previous definition is here
+"
+"1","#define BOOST_NO_CXX11_RVALUE_REFERENCES 1
+"
+"1","        ^
+"
+"1","1 warning generated.
+"
+"1","ld: warning: directory not found for option '-L/usr/local/opt/gettext/lib'
+"
+"1","
+"
+"1","SAMPLING"
+"1"," FOR MODEL '"
+"1","veg_SB1"
+"1","' NOW (CHAIN "
+"1","1"
+"1",").
+"
+"1","
+"
+"1","Gradient evaluation took 0.000684 seconds"
+"1","
+"
+"1","1000 transitions using 10 leapfrog steps per transition would take 6.84 seconds."
+"1","
+"
+"1","Adjust your expectations accordingly!"
+"1","
+"
+"1","
+"
+"1","
+"
+"1","Iteration:    1 / 2000 [  0%]  (Warmup)"
+"1","
+"
+"1","Iteration:  200 / 2000 [ 10%]  (Warmup)"
+"1","
+"

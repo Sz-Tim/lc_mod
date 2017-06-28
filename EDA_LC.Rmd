@@ -1,0 +1,129 @@
+---
+title: "Land Cover EDA"
+author: "Tim Szewczyk"
+date: "6/12/2017"
+output: html_document
+---
+
+```{r setEnv, message=FALSE, echo=FALSE}
+# load libraries
+library(tidyverse); theme_set(theme_bw()); library(sevcheck)
+theme_large <- theme(axis.text=element_text(size=9),
+                     axis.title=element_text(size=14),
+                       axis.text.x=element_text(angle=270, hjust=0, vjust=0.5))
+
+# load data
+nlcd.i <- read.csv("../GIS/out/nlcd_i.csv")
+grnt.i <- read.csv("../GIS/out/grnt_i.csv")
+buck.df <- read_csv("../GIS/buckthorn/buckthorn_NE_LC_canopy.csv") %>% 
+  mutate(nlcd.LC=factor(nlcd.i$LC[match(.$nlcdAllCat, nlcd.i$Value)],
+                        levels=nlcd.i$LC),
+         grnt.LC=factor(grnt.i$LC[match(.$nhlcAllCat, grnt.i$Value)],
+                        levels=unique(grnt.i$LC)),
+         grnt.Agg=factor(grnt.i$LC.Agg[match(.$nhlcAllCat, grnt.i$Value)],
+                        levels=unique(grnt.i$LC.Agg)))
+nh.df <- read_csv("../GIS/out/NH_overview.csv") %>% 
+  mutate(nlcd.LC=factor(nlcd.i$LC[match(.$nlcdAllCat, nlcd.i$Value)],
+                        levels=nlcd.i$LC),
+         grnt.LC=factor(grnt.i$LC[match(.$nhlcAllCat, grnt.i$Value)],
+                        levels=unique(grnt.i$LC)),
+         grnt.Agg=factor(grnt.i$LC.Agg[match(.$nhlcAllCat, grnt.i$Value)],
+                        levels=unique(grnt.i$LC.Agg))) %>%
+  filter(!is.na(nlcd.LC) & !is.na(grnt.LC))
+
+# proportional comparisons
+buck.prop <- buck.df %>% filter(grnt.LC!="Transp.") %>%
+  group_by(nlcd.LC, grnt.LC) %>%
+  summarise(prop.buck=n()/nrow(.))
+nh.prop <- nh.df %>% group_by(nlcd.LC, grnt.LC) %>% 
+  summarise(prop.NH=n()/10000) %>%
+  full_join(., buck.prop)
+
+# explore sample 1-acre grid
+# gis output
+nlcd.gis <- read_csv("../GIS/out/t2_nlcd.csv") %>%
+  group_by(IDCell, LC) %>% 
+  summarise(LC.Area=sum(PropArea)) %>%
+  group_by(IDCell) %>%
+  mutate(nlcd_prop=LC.Area/sum(LC.Area))
+grnt.gis <- read_csv("../GIS/out/t2_grnt.csv") %>%
+  group_by(IDCell, LC) %>% 
+  summarise(LC.Area=sum(PropArea)) %>%
+  group_by(IDCell) %>%
+  mutate(grnt_prop=LC.Area/sum(LC.Area))
+nlcd.gis$nlcd.LC <- nlcd.i$LC[match(nlcd.gis$LC, nlcd.i$Value)]
+nlcd.gis$agg.LC <- factor(nlcd.i$LC.Agg[match(nlcd.gis$LC, nlcd.i$Value)])
+nlcd.gis <- nlcd.gis %>% group_by(IDCell, agg.LC) %>%
+  summarise(nlcd_prop=sum(nlcd_prop)) %>%
+  mutate(ID.LC=paste(IDCell, as.numeric(agg.LC), sep="."))
+grnt.gis$grnt.LC <- grnt.i$LC[match(grnt.gis$LC, grnt.i$Value)]
+grnt.gis$agg.LC <- factor(grnt.i$LC.Agg[match(grnt.gis$LC, grnt.i$Value)])
+grnt.gis <- grnt.gis %>% group_by(IDCell, agg.LC) %>%
+  summarise(grnt_prop=sum(grnt_prop)) %>%
+  mutate(ID.LC=paste(IDCell, as.numeric(agg.LC), sep="."))
+
+y.df <- expand.grid(ID=1:max(grnt.gis$IDCell),
+                    LC=1:6) %>%
+  as_tibble() %>%
+  mutate(ID.LC=paste(ID, LC, sep="."))
+y.df$LC.f <- levels(grnt.gis$agg.LC)[y.df$LC]
+x.df <- filter(y.df, LC!=6)
+y.df$PropArea <- grnt.gis$grnt_prop[match(y.df$ID.LC, grnt.gis$ID.LC)]
+y.df$PropArea[is.na(y.df$PropArea)] <- 0
+x.df$PropArea <- nlcd.gis$nlcd_prop[match(x.df$ID.LC, nlcd.gis$ID.LC)]
+x.df$PropArea[is.na(x.df$PropArea)] <- 0
+full.grid <- y.df
+full.grid$LC.f.agg <- full.grid$LC.f
+full.grid$LC.f.agg[full.grid$LC.f.agg=="WP"] <- "Evg"
+full.grid <- full.grid %>% 
+  group_by(ID, LC.f.agg) %>%
+  mutate(PropArea=sum(PropArea)) %>%
+  filter(LC != 6)
+full.grid$PropArea.NLCD <- x.df$PropArea[match(full.grid$ID.LC, x.df$ID.LC)]
+names(full.grid)[5] <- "PropArea.GRANIT"
+no0.grid <- filter(full.grid, !(PropArea.GRANIT==0 & PropArea.NLCD==0))
+write_csv(full.grid, "../GIS/out/t_full.csv")
+write_csv(no0.grid, "../GIS/out/t_no0.csv")
+```
+
+# NLCD vs GRANIT: 10,000 random points in NH  
+Integrating the NLCD and GRANIT datasets involves several challenges.  
+First, the two datasets do not use equivalent categories. In many cases, these differences do not matter when categories are aggregated (e.g., forest subtypes). Unfortunately, for several categories, there is no unambiguous translation (e.g., NLCD's *Shrub/Scrub* & *Grassland/Herbaceous* categories, GRANIT's *Other Cleared* category) and no obvious aggregate category. The pixels represented by these categories are represented by a broad set of categories in the other dataset. 
+Second, the intuitive aggregate categories for GRANIT are not necessarily the intuitive aggregate categories for NLCD. GRANIT's *Other Cleared* and *Disturbed* categories would seem to imply a relationship to one of NLCD's *Developed* categories, but that is not always or even mostly the case. Some sort of clustering algorithm might be a good solution over subjective assignment. 
+```{r nlcd.granit, fig.width=8, fig.height=7, warning=FALSE, echo=FALSE}
+nl.gr.bar <- ggplot(nh.prop, aes(x=nlcd.LC, y=prop.NH*10000)) + 
+  geom_bar(stat="identity") + theme_large + labs(y="Abundance in NH")
+nl.gr.bar + facet_wrap(~grnt.LC) + labs(x="NLCD") +
+  ggtitle("Panels: GRANIT")
+nl.gr.bar + facet_wrap(~grnt.LC, scales="free_y") + labs(x="NLCD") +
+  ggtitle("Panels: GRANIT")
+nl.gr.bar %+% aes(x=grnt.LC) + labs(x="GRANIT") +
+  facet_wrap(~nlcd.LC) + ggtitle("Panels: NLCD")
+nl.gr.bar %+% aes(x=grnt.LC) + labs(x="GRANIT") +
+  facet_wrap(~nlcd.LC, scales="free_y") + ggtitle("Panels: NLCD")
+```
+
+
+```{r tile.plots, fig.width=8, fig.height=7, warning=FALSE, echo=FALSE}
+nh.prop %>% 
+  ggplot(aes(x=nlcd.LC, y=grnt.LC, fill=prop.NH)) + theme_large +
+    ggtitle("NLCD vs GRANIT: 10,000 random pts in NH") +
+    labs(x="NLCD", y="GRANIT") +
+    geom_tile() + theme(axis.text.x=element_text(angle=270, hjust=0, vjust=0.5)) +
+    scale_fill_gradient2(low="red", high="blue", mid="gray90", midpoint=0, na.value=NA)
+nh.prop %>% 
+  ggplot(aes(x=nlcd.LC, y=grnt.LC, fill=prop.buck-prop.NH)) + theme_large +
+    ggtitle("NLCD vs GRANIT: buckthorn") + labs(x="NLCD", y="GRANIT") +
+    geom_tile() + theme(axis.text.x=element_text(angle=270, hjust=0, vjust=0.5)) +
+    scale_fill_gradient2("Prop buck -\nProp NH",
+                         low="red", high="blue", mid="gray90", midpoint=0, na.value=NA)
+nh.prop %>% filter(!is.na(prop.buck)) %>%
+  ggplot(aes(x=nlcd.LC, y=grnt.LC, fill=prop.buck-prop.NH)) + theme_large +
+    ggtitle("NLCD vs GRANIT: buckthorn (no Transp.)") + labs(x="NLCD", y="GRANIT") +
+    geom_tile() + theme(axis.text.x=element_text(angle=270, hjust=0, vjust=0.5)) + 
+    scale_fill_gradient2("Prop buck -\nProp NH",
+                         low="red", high="blue", mid="gray90", midpoint=0, na.value=NA)
+
+```
+
+

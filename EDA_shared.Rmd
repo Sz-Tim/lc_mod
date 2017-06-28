@@ -1,0 +1,322 @@
+---
+title: 'EDA: Land cover & FIA'
+author: "Tim Szewczyk"
+date: "6/13/2017"
+output: html_document
+---
+
+```{r setEnv, message=FALSE, echo=FALSE}
+library(sevcheck); library(tidyverse); library(forcats)
+theme_set(theme_bw())
+theme_update(axis.text=element_text(size=12), axis.title=element_text(size=13),
+             axis.text.x=element_text(angle=300, hjust=0, vjust=1))
+fia.5y <- read_csv("../GIS/out/fia_2011-2015.csv") %>% filter(!is.na(grnt.Agg))
+nlcd.i <- read_csv("../GIS/out/nlcd_i.csv")
+grnt.i <- read_csv("../GIS/out/grnt_i.csv")
+lc.cols <- c("Dev"="red", "Other"="gray", "Hwd"="olivedrab", "WP"="orange", 
+             "Evg"="darkgreen", "Mxd"="palegreen")
+full.grid <- read_csv("../GIS/out/t_full.csv")
+no0.grid <- read_csv("../GIS/out/t_no0.csv")
+
+nlcd.i$LC.Agg[nlcd.i$LC=="Dev. High"] <- "Dev"
+```
+
+# Current LC aggregation  
+For these figures, I aggregated the land cover categories into *Hardwood*, *Mixed*, *White Pine* (GRANIT, FIA), *Evergreen*, *Developed*, and *Other*. The other category contains categories that should be unsuitable for buckthorn. It is still simple to change the way the categories in each dataset are aggregated. 
+```{r aggregations}
+# NLCD
+nlcd.i %>% select(LC.Full, LC.Agg) %>% arrange(LC.Agg, LC.Full)
+# GRANIT
+grnt.i %>% select(LC.Full, LC.Agg) %>% arrange(LC.Agg, LC.Full) %>% as.data.frame()
+```
+
+The FIA data shown here are from 2011-2015. Assuming that each plot is actually in some kind of forest, I categorized each plot using the GRANIT definitions as *Hardwood* (<25% conifer), *Mixed* (25%-65% conifer), *White Pine* (>=65% conifer & white pine is the dominant conifer), or *Evergreen* (>=65% conifer, white pine is not the dominant conifer)). For now, I've subsetted the FIA data to those plots that overlap with GRANIT data. I treated each FIA plot as a point and extracted the cell value from the GRANIT and NLCD rasters. Because of the lat/lon fuzzing, this isn't perfect, but should be a decent approximation.  
+
+
+# Land cover categories across datasets  
+```{r lc.maps, fig.width=7, fig.height=5}
+map.df <- fia.5y %>% gather(LC.Source, LC.Value, c(44,48,49))
+ggplot(map.df, aes(x=lon, y=lat, colour=LC.Value)) + geom_point() +
+  facet_wrap(~LC.Source) + scale_colour_manual("LC", values=lc.cols)
+```
+
+Despite a fair amount of variation in the LC classification across the three sources, the mode is generally in agreement. Both NLCD and GRANIT categorize a number of FIA plots as *Developed* or *Other*. This could be due to the fuzzing, inaccuracies in the NLCD/GRANIT categorizations, or a land use change in or near the FIA plots. As the aggregated categories are right now, it seems that a fair number of points that GRANIT identifies as *Developed* are identified by NLCD as *Other*.
+```{r lc.hist, fig.height=6, fig.width=6}
+lc.hist <- ggplot(fia.5y, aes(x=fia.LC)) + geom_bar() + xlab("FIA LC")
+lc.hist + facet_wrap(~nlcd.Agg) + ggtitle("Panels: NLCD")
+lc.hist + facet_wrap(~grnt.Agg) + ggtitle("Panels: GRANIT")
+lc.hist + facet_grid(grnt.Agg~nlcd.Agg) + ggtitle("GRANIT (r) x NLCD (c)")
+```
+
+
+# Conditions  
+Most plots (72%) only have one condition. Those with more than one largely have two. As would be expected, plots with multiple conditions tend to be currently identified as Mixed (FIA LC). Surprisingly, a higher proportion of White Pine plots have multiple conditions compared to the other forest categories. Assuming that a condition change represents some kind of change in forest type (directly or indirectly), I would have expected that plots would be *less* likely to be categorized as White Pine if there were multiple conditions. Is there something relevant about white pine's growth/density patterns? 
+
+In plots with multiple conditions, the proportion of the plot represented by the largest condition ranges from 0.4-0.99 with a mean of 0.73 and median of 0.75. 
+```{r cond.tabs}
+# Number of plots by condition number
+xtabs(~nconds, data=fia.5y)
+# Proportion of plots by condition number
+xtabs(~nconds, data=fia.5y) %>% prop.table() %>% round(3)
+# Number of plots by condition number and FIA LC
+xtabs(~nconds + fia.LC, data=fia.5y)
+# Proportion of plots by condition number and FIA LC
+## Proportion within each number of conditions
+xtabs(~nconds + fia.LC, data=fia.5y) %>% prop.table(margin=1) %>% round(3)
+## Proportion within each LC category
+xtabs(~nconds + fia.LC, data=fia.5y) %>% prop.table(margin=2) %>% round(3)
+
+# Number of plots by condition, FIA LC, and NLCD LC
+xtabs(~nconds + fia.LC + nlcd.Agg, data=fia.5y)
+
+# histogram of condition proportions
+hist(filter(fia.5y, nconds > 1)$max_condpr, main="",
+     xlab="Proportion of plot represented by largest condition")
+```
+
+Separating by condition would refine the *Mixed* categories and likely pull out more white pine stands. However, it seems that the plot totals are doing a pretty good job of identifying white pine, so it might be unnecessary to separate plots by condition. 
+```{r wp.prop, warning=FALSE}
+cond.dens <- ggplot(fia.5y, aes(colour=factor(nconds))) + geom_density() +
+  scale_colour_manual("nConditions", values=c("gray80", "gray60", "black"))
+cond.dens + aes(x=ba) + xlab("Total basal area")
+cond.dens + aes(x=prop_conif) + xlab("Proportion Evg basal area")
+cond.dens + aes(x=wp_ba/ba) + xlab("Proportion WP of total basal area")
+cond.dens + aes(x=prop_wp_co) + xlab("Proportion WP of Evg basal area")
+cond.dens + aes(x=prop_wp_co) + xlab("Proportion WP of Evg basal area") +
+  facet_wrap(~fia.LC)
+```
+
+
+
+```{r cond.lc, fig.height=3, fig.width=7}
+cond.lc <- ggplot(fia.5y) + geom_bar() + facet_wrap(~nconds)
+cond.lc + aes(x=fia.LC) + xlab("FIA")
+cond.lc + aes(x=nlcd.Agg) + xlab("NLCD")
+cond.lc + aes(x=grnt.Agg) + xlab("GRANIT")
+```
+
+There is not an obvious geographic pattern in the number of conditions within New Hampshire. 
+```{r cond.map, fig.height=4.5, fig.width=4}
+ggplot(fia.5y, aes(x=lon, y=lat, colour=factor(nconds))) + geom_point() +
+  scale_colour_manual("nConditions", values=c("gray80", "gray60", "black"))
+```
+
+# Correlations among FIA variables  
+With the FIA data, there are several variables that could be useful for describing the relative proportions of tree species or types. 
+```{r fia.corr, fig.width=8, fig.height=8}
+fia.5y %>% select(tpa, ba, qmd, netbdft, grosscuft, netcuft, sward) %>% 
+  mutate(t_tpa=log(tpa), t_qmd=log(qmd)) %>%
+  pairs(upper.panel=panel.cor, col=rgb(0,0,0,0.1),
+        main="Plot totals: All trees")
+fia.5y %>% select(conifer_tp, conifer_ba, qmd, conifer_sw, prop_conif) %>% 
+  mutate(t_con_tpa=log(conifer_tp), t_prop_c=asin(sqrt(prop_conif)), t_qmd=log(qmd)) %>%
+  pairs(upper.panel=panel.cor, col=rgb(0,0,0,0.1),
+        main="Plot totals: Conifers")
+fia.5y %>% 
+  select(wp_tpa, wp_ba, qmd, wp_netbdft, 
+         wp_grosscu, wp_netcuft, wp_sward, prop_wp_co) %>% 
+  mutate(t_wp_tpa=log(wp_tpa), t_prop_wp=asin(sqrt(prop_wp_co)), t_qmd=log(qmd)) %>%
+  pairs(upper.panel=panel.cor, col=rgb(0,0,0,0.1),
+        main="Plot totals: White pine")
+```
+
+
+
+# GRANIT vs NLCD  
+
+These plots explore the agreement (or disagreement) between NLCD and GRANIT. The figures are based on either 10,000 random points throughout New Hampshire or on the total occurrences of buckthorn in the state from IPANE, EDDMapS, and GBIF. The aggregated categories are the same used above. 
+```{r lc.setEnv, echo=FALSE, message=FALSE}
+buck.df <- read_csv("../GIS/buckthorn/buckthorn_NE_LC_canopy.csv") %>% 
+  mutate(nlcd.LC=factor(nlcd.i$LC[match(.$nlcdAllCat, nlcd.i$Value)],
+                        levels=nlcd.i$LC),
+         nlcd.Agg=factor(nlcd.i$LC.Agg[match(.$nlcdAllCat, nlcd.i$Value)],
+                         levels=unique(nlcd.i$LC.Agg)),
+         grnt.LC=factor(grnt.i$LC[match(.$nhlcAllCat, grnt.i$Value)],
+                        levels=unique(grnt.i$LC)),
+         grnt.Agg=factor(grnt.i$LC.Agg[match(.$nhlcAllCat, grnt.i$Value)],
+                        levels=unique(grnt.i$LC.Agg)))
+nh.df <- read_csv("../GIS/out/NH_overview.csv") %>% 
+  mutate(nlcd.LC=factor(nlcd.i$LC[match(.$nlcdAllCat, nlcd.i$Value)],
+                        levels=nlcd.i$LC),
+         nlcd.Agg=factor(nlcd.i$LC.Agg[match(.$nlcdAllCat, nlcd.i$Value)],
+                         levels=unique(nlcd.i$LC.Agg)),
+         grnt.LC=factor(grnt.i$LC[match(.$nhlcAllCat, grnt.i$Value)],
+                        levels=unique(grnt.i$LC)),
+         grnt.Agg=factor(grnt.i$LC.Agg[match(.$nhlcAllCat, grnt.i$Value)],
+                        levels=unique(grnt.i$LC.Agg))) %>%
+  filter(!is.na(nlcd.LC) & !is.na(grnt.LC))
+
+# proportional comparisons
+buck.prop <- buck.df %>% filter(grnt.LC!="Transp.") %>%
+  group_by(nlcd.LC, grnt.LC) %>%
+  summarise(prop.buck=n()/nrow(.))
+nh.prop <- nh.df %>% group_by(nlcd.LC, grnt.LC) %>% 
+  summarise(prop.NH=n()/10000) %>%
+  full_join(., buck.prop)
+buck.prop.Agg <- buck.df %>% filter(grnt.LC!="Transp.") %>%
+  group_by(nlcd.Agg, grnt.Agg) %>%
+  summarise(prop.buck=n()/nrow(.))
+nh.prop.Agg <- nh.df %>% group_by(nlcd.Agg, grnt.Agg) %>% 
+  summarise(prop.NH=n()/10000) %>%
+  full_join(., buck.prop.Agg)
+nh.prop.Agg$grnt.Agg <- factor(nh.prop.Agg$grnt.Agg,
+                               levels=levels(nh.prop.Agg$grnt.Agg)[c(1:3,5:6,4)])
+nh.prop.Agg$nlcd.Agg <- factor(nh.prop.Agg$nlcd.Agg,
+                               levels=levels(nh.prop.Agg$grnt.Agg))
+
+# explore sample 1-acre grid
+# gis output
+nlcd.gis <- read_csv("../GIS/out/t2_nlcd.csv") %>%
+  group_by(IDCell, LC) %>% 
+  summarise(LC.Area=sum(PropArea)) %>%
+  group_by(IDCell) %>%
+  mutate(nlcd_prop=LC.Area/sum(LC.Area))
+grnt.gis <- read_csv("../GIS/out/t2_grnt.csv") %>%
+  group_by(IDCell, LC) %>% 
+  summarise(LC.Area=sum(PropArea)) %>%
+  group_by(IDCell) %>%
+  mutate(grnt_prop=LC.Area/sum(LC.Area))
+nlcd.gis$nlcd.LC <- nlcd.i$LC[match(nlcd.gis$LC, nlcd.i$Value)]
+nlcd.gis$agg.LC <- factor(nlcd.i$LC.Agg[match(nlcd.gis$LC, nlcd.i$Value)])
+nlcd.gis.full <- nlcd.gis
+nlcd.gis <- nlcd.gis %>% group_by(IDCell, agg.LC) %>%
+  summarise(nlcd_prop=sum(nlcd_prop)) %>%
+  mutate(ID.LC=paste(IDCell, as.numeric(agg.LC), sep="."))
+grnt.gis$grnt.LC <- grnt.i$LC[match(grnt.gis$LC, grnt.i$Value)]
+grnt.gis$agg.LC <- factor(grnt.i$LC.Agg[match(grnt.gis$LC, grnt.i$Value)])
+grnt.gis.full <- grnt.gis
+grnt.gis <- grnt.gis %>% group_by(IDCell, agg.LC) %>%
+  summarise(grnt_prop=sum(grnt_prop)) %>%
+  mutate(ID.LC=paste(IDCell, as.numeric(agg.LC), sep="."))
+```
+
+
+Proportion of points using all categories of NLCD and all categories of GRANIT. Typically, the mode of each aligns with a sensible analog in the other dataset. Nevertheless, there is still a lot of scatter. 
+```{r nlcd.granit, fig.width=9, fig.height=9, warning=FALSE}
+nl.gr.bar <- ggplot(nh.prop, aes(x=nlcd.LC, y=prop.NH*10000)) + 
+  geom_bar(stat="identity") + labs(y="Abundance in NH") +
+  theme(axis.text.x=element_text(size=10))
+nl.gr.bar + facet_wrap(~grnt.LC) + labs(x="NLCD") +
+  ggtitle("Panels: GRANIT")
+nl.gr.bar %+% aes(x=grnt.LC) + labs(x="GRANIT") +
+  facet_wrap(~nlcd.LC) + ggtitle("Panels: NLCD")
+```
+
+Similarly, the first-approximation agreement can be seen using the aggregated categories for each dataset. 
+```{r nlcd.granit.Agg, fig.width=5, fig.height=5, warning=FALSE}
+nl.gr.bar <- ggplot(nh.prop.Agg, aes(x=nlcd.Agg, y=prop.NH*10000)) + 
+  geom_bar(stat="identity") + labs(y="Abundance in NH")
+nl.gr.bar + facet_wrap(~grnt.Agg) + labs(x="NLCD (aggregated)") +
+  ggtitle("Panels: GRANIT (aggregated)")
+nl.gr.bar %+% aes(x=grnt.Agg) + labs(x="GRANIT (aggregated)") +
+  facet_wrap(~nlcd.Agg) + ggtitle("Panels: NLCD (aggregated)")
+```
+
+
+
+```{r tile.plots, fig.width=8, fig.height=7, warning=FALSE}
+nh.prop %>% 
+  ggplot(aes(x=nlcd.LC, y=grnt.LC, fill=prop.NH)) + 
+    ggtitle("NLCD vs GRANIT: 10,000 random pts in NH") +
+    labs(x="NLCD", y="GRANIT") +
+    geom_tile() + theme(axis.text.x=element_text(angle=270, hjust=0, vjust=0.5)) +
+    scale_fill_gradient2(low="red", high="blue", mid="gray90", midpoint=0, na.value=NA)
+nh.prop %>% filter(!is.na(prop.buck)) %>%
+  ggplot(aes(x=nlcd.LC, y=grnt.LC, fill=prop.buck-prop.NH)) + 
+    ggtitle("NLCD vs GRANIT: buckthorn (no Transp.)") + labs(x="NLCD", y="GRANIT") +
+    geom_tile() + theme(axis.text.x=element_text(angle=270, hjust=0, vjust=0.5)) + 
+    scale_fill_gradient2("Prop buck -\nProp NH",
+                         low="red", high="blue", mid="gray90", midpoint=0, na.value=NA)
+
+```
+
+
+```{r tile.plots.Agg, fig.width=8, fig.height=7, warning=FALSE}
+nh.prop.Agg %>% 
+  ggplot(aes(x=nlcd.Agg, y=grnt.Agg, fill=prop.NH)) + 
+    ggtitle("NLCD vs GRANIT: 10,000 random pts in NH") +
+    labs(x="NLCD (aggregated)", y="GRANIT (aggregated)") +
+    geom_tile() + 
+    scale_fill_gradient2(low="red", high="blue", mid="gray90", midpoint=0, na.value=NA)
+nh.prop.Agg %>% filter(!is.na(prop.buck)) %>%
+  ggplot(aes(x=nlcd.Agg, y=grnt.Agg, fill=prop.buck-prop.NH)) + 
+    ggtitle("NLCD vs GRANIT: buckthorn (no Transp.)") + 
+    labs(x="NLCD (aggregated)", y="GRANIT (aggregated)") + geom_tile() + 
+    scale_fill_gradient2("Prop buck -\nProp NH",
+                         low="red", high="blue", mid="gray90", midpoint=0, na.value=NA)
+
+```
+
+
+
+# Aggregation mismatches  
+```{r agg.mismatch, fig.height=5, fig.width=8}
+ggplot(nh.df, aes(x=nlcd.LC)) + geom_bar() + 
+  facet_wrap(~grnt.Agg, ncol=3, scales="free_y") +
+  theme(axis.text.x=element_text(angle=270, hjust=0, vjust=0.5, size=10)) +
+  ggtitle("Panels: Aggregated GRANIT") + labs(x="NLCD")
+ggplot(nh.df, aes(x=grnt.LC)) + geom_bar() + 
+  facet_wrap(~nlcd.Agg, ncol=3, scales="free_y") +
+  theme(axis.text.x=element_text(angle=270, hjust=0, vjust=0.5, size=10)) +
+  ggtitle("Panels: Aggregated NLCD") + labs(x="GRANIT")
+```
+
+Using a sample 1-acre grid in west-central New Hampshire, I calculated the composition of GRANIT and NLCD within each cell. In both datasets, most land cover categories were 0's in most cells. Both datasets generally agreed on the 0's. When these mutual 0's are excluded, the agreement is still fairly good for *Evergreen* and *Hardwood* forest types. In these plots, *White Pine* from GRANIT was lumped back into *Evergreen*. The agreement is decent for *Mixed* and *Other* as well, though NLCD tends to estimate higher proportions of each of these categories than GRANIT. The *Developed* category is the most abnormal, with GRANIT estimating total coverage in many cells that NLCD estimates none. The *Developed* category in GRANIT encompasses cells from a range of NLCD categories, including high proportions of Developed Open/Low/Medium, all forest types, and Shrub/Scrub. These essentially all fall into the GRANIT *Other Cleared* category. 
+```{r test.grid}
+full.grid %>% gather(Source, PropArea, c(5,7)) %>%
+  ggplot(aes(x=PropArea, colour=Source)) + geom_density() + 
+  facet_wrap(~LC.f, scales="free_y") + labs(main="Full grid", x="Proportion of area") +
+  theme(legend.position=c(0.85,0.2))
+no0.grid %>% gather(Source, PropArea, c(5,7)) %>%
+  ggplot(aes(x=PropArea, colour=Source)) + geom_density() + 
+  facet_wrap(~LC.f, scales="free_y") + 
+  labs(main="Excluding cells where GRANIT and NLCD both estimate 0", 
+       x="Proportion of area") +
+  theme(legend.position=c(0.85,0.2))
+
+ggplot(full.grid, aes(x=PropArea.GRANIT - PropArea.NLCD)) + geom_density() +
+  facet_wrap(~LC.f, scales="free_y") + ggtitle("Full grid")
+ggplot(no0.grid, aes(x=PropArea.GRANIT - PropArea.NLCD)) + geom_density() +
+  facet_wrap(~LC.f) + ggtitle("Excluding cells where GRANIT and NLCD both estimated 0")
+
+filter(nh.df, grnt.Agg=="Dev") %>% ggplot(aes(x=nlcd.LC)) + geom_bar() + 
+  labs(title="GRANIT's developed category", x="NLCD")
+ggplot(full.grid, aes(x=PropArea.GRANIT, y=PropArea.NLCD)) + geom_point(alpha=0.01) +
+  facet_wrap(~LC.f)
+ggplot(no0.grid, aes(x=PropArea.GRANIT, y=PropArea.NLCD)) + geom_point(alpha=0.01) +
+  facet_wrap(~LC.f)
+
+# identify full mismatched cells
+wrong <- filter(no0.grid, LC.f.agg=="Dev" & (PropArea.GRANIT-PropArea.NLCD==1))$ID
+filter(nlcd.gis.full, IDCell %in% wrong) %>%
+  ggplot(aes(x=nlcd.LC)) + geom_bar() + 
+  labs(title="GRANIT's developed category: Mismatched cells vs. NLCD", x="NLCD")
+filter(grnt.gis.full, IDCell %in% wrong) %>%
+  ggplot(aes(x=grnt.LC)) + geom_bar() + 
+  labs(title="GRANIT's developed category: Mismatched cells vs. NLCD", x="GRANIT")
+```
+
+
+```{r threshold}
+# exploring the possibility of converting to multinomial instead of compositional
+threshold <- seq(0.5, 1, by=0.01)
+GRNT <- read.csv("data/t_y_mx.csv") %>% as.matrix
+NLCD <- read.csv("data/t_x_mx.csv") %>% as.matrix
+
+hist(apply(GRNT, 1, max), xlim=c(0,1), xlab="Largest proportion in acre")
+hist(apply(NLCD, 1, max), xlim=c(0,1), xlab="Largest proportion in acre")
+
+prAbove.grnt <- rep(NA, length(threshold))
+prAbove.nlcd <- prAbove.grnt
+for(i in 1:length(threshold)) {
+  prAbove.grnt[i] <- sum(rowSums(GRNT >= threshold[i])==1)/nrow(GRNT)
+  prAbove.nlcd[i] <- sum(rowSums(NLCD >= threshold[i])==1)/nrow(NLCD)
+}
+
+plot(threshold, prAbove.grnt*100, type="l", ylim=c(0,100),
+     ylab="% of cells with dominant LC", main="GRANIT")
+plot(threshold, prAbove.nlcd*100, type="l", ylim=c(0,100),
+     ylab="% of cells with dominant LC", main="NLCD")
+```
+
+

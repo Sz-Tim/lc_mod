@@ -1,0 +1,6 @@
+"0","nh.prop %>% filter(!is.na(prop.buck)) %>%"
+"0","  ggplot(aes(x=nlcd.LC, y=grnt.LC, fill=prop.buck-prop.NH)) + "
+"0","    ggtitle(""NLCD vs GRANIT: buckthorn (no Transp.)"") + labs(x=""NLCD"", y=""GRANIT"") +"
+"0","    geom_tile() + theme(axis.text.x=element_text(angle=270, hjust=0, vjust=0.5)) + "
+"0","    scale_fill_gradient2(""Prop buck -\nProp NH"","
+"0","                         low=""red"", high=""blue"", mid=""gray90"", midpoint=0, na.value=NA)"
