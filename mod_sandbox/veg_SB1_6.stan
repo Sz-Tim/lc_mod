@@ -12,8 +12,8 @@ data {
   vector<lower=0, upper=1>[N] p;  //pr(WP|Evg)
 }
 parameters {
-  cholesky_factor_corr[L] L_Omega;  //covariance matrix for Y1 & Y2.ds from nu
-  vector<lower=0>[L] L_sigma;  //covariance matrix for Y1 & Y2.ds from nu
+  cholesky_factor_corr[L] L_Omega[2]; //covariance matrix for Y1 & Y2 from nu
+  vector<lower=0>[L] L_sigma[2];  //covariance matrix for Y1 & Y2 from nu
   row_vector<lower=0, upper=1>[L] nu[N];  //latent LC proportions
   vector[nB_d[1]] beta_d1;
   vector[nB_d[2]] beta_d2;
@@ -26,7 +26,7 @@ transformed parameters {
   row_vector[L] Y2_ds[N];  //de-biased and split NLCD proportions
   matrix<lower=-1, upper=1>[N,L-1] d; //bias between NLCD and nu
   
-  //estimate bias                       // POSSIBLE TO VECTORIZE? //
+  //estimate bias
   d[,1] = X_d1 * beta_d1;
   d[,2] = X_d2 * beta_d2;
   d[,3] = X_d3 * beta_d3;
@@ -44,10 +44,12 @@ transformed parameters {
 }
 model {
   //priors
-  matrix[L,L] L_Sigma;
-  L_Sigma = diag_pre_multiply(L_sigma, L_Omega);
-  L_Omega ~ lkj_corr_cholesky(4);
-  L_sigma ~ cauchy(0, 2.5);
+  matrix[L,L] L_Sigma[2];
+  for(j in 1:2) {
+    L_Sigma[j] = diag_pre_multiply(L_sigma[j], L_Omega[j]);
+    L_Omega[j] ~ lkj_corr_cholesky(4);
+    L_sigma[j] ~ cauchy(0, 2.5);
+  }
   for(n in 1:N) {
     nu[n] ~ uniform(0,1);
   }
@@ -58,6 +60,6 @@ model {
   to_vector(beta_d5) ~ normal(0, 1);
   
   //likelihood
-   Y1 ~ multi_normal_cholesky(nu, L_Sigma);
-   Y2_ds ~ multi_normal_cholesky(nu, L_Sigma);
+   Y1 ~ multi_normal_cholesky(nu, L_Sigma[1]);
+   Y2_ds ~ multi_normal_cholesky(nu, L_Sigma[2]);
 }
