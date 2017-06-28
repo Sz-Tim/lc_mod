@@ -78,55 +78,73 @@ ggplot(gg.nu, aes(x=nu.true, y=value)) + geom_abline(slope=1, linetype=2) +
   geom_point(alpha=0.02) + facet_wrap(~LC, scales="free")
 ```
 
-
+# Bias correction & pr(WP|Evg)
 ```{r mod.hier}
 # simulate data
-## set parameters
-nCell <- 50
+## global parameters
+nCell <- 200
 nLC <- 6
-s2.grnt <- 0.001
-s2.nlcd <- s2.grnt
-cov.grnt <- cov(GRNT)
-diag(cov.grnt) <- s2.grnt
-cov.nlcd <- cov.grnt
-nB.d <- 2 %>% rep(nLC-1)
+
+## simulation parameters
+s2.grnt <- 0.001  # variance for grnt LCs
+s2.nlcd <- 0.003  # variance for nlcd LCs
+
+## latent LC proportions
+nu <- GRNT[sample(1:nrow(GRNT), nCell),]
+
+## covariance matrices
+cov.grnt <- diag(s2.grnt, nLC, nLC)
+cov.nlcd <- diag(s2.nlcd, nLC, nLC)
+
+## simulate bias in NLCD
+### initialize objects
+nB.d <- 3 %>% rep(nLC-1)  # 2 covariates + 1 intercept
 X.d <- vector("list", nLC-1)
 B.d <- X.d
 d <- matrix(nrow=nCell, ncol=nLC-1)
+### generate betas & covariates, then calculate deltas
 for(i in 1:(nLC-1)) {
-  X.d[[i]] <- runif(nCell*nB.d[i], -1, 1) %>% matrix(nrow=nCell)
+  X.d[[i]] <- runif(nCell*(nB.d[i]-1), -1, 1) %>% matrix(nrow=nCell) %>% 
+    cbind(., rep(1, nCell))
   B.d[[i]] <- runif(nB.d[i], -0.5, 0.5) %>% matrix(nrow=nB.d[i])
   d[,i] <- X.d[[i]] %*% B.d[[i]]
 }
 
-nu <- GRNT[sample(1:nrow(GRNT), nCell),]
-Y1 <- nu; Y2.ds <- Y1
-p <- nu[,6]/(nu[,5]+nu[,6]+0.0001) + rnorm(nCell, 0, 0.005)
-p[p>1] <- 1; p[p<0] <- 0
+## proportion WP|Evg
+nB.p <- 3
+B.p <- c(1.2, -0.75, 0.25)
+p.nu <- nu[,6]/(nu[,5]+nu[,6]+0.0001)
+p.nu[p.nu==0] <- 0.0001; p.nu[p.nu==1] <- 0.9999
+X.p <- matrix(nrow=nCell, ncol=nB.p)
+X.p[,1] <- logit(p.nu)/B.p[1] - B.p[3]
+X.p[,2] <- (logit(p.nu) - X.p[,1]/B.p[1])/B.p[2] - B.p[3]
+X.p[,3] <- 1
+plot(antilogit(X.p %*% B.p), p.nu)
 
-# GRNT, eta
+## generate Ys
+### GRNT, NLCD.unbiased.split
+Y1 <- nu; Y2.ds <- Y1
 for(i in 1:nCell) {
   Y1[i,] <- rmvnorm(1, nu[i,], cov.grnt)
   Y2.ds[i,] <- rmvnorm(1, nu[i,], cov.nlcd)
 }
-
-# combine WP + Evg
+### NLCD: combine WP + Evg
 Y2.d <- cbind(Y2.ds[,1:4], Y2.ds[,5] + Y2.ds[,6])
-
-# add bias
+### NLCD: add bias
 Y2 <- Y2.d - d
 
 
 
-## run model
-d_SB1.6 <- list(N=nrow(nu), L=ncol(nu), Y1=Y1, Y2=Y2, p=p, nB_d=nB.d, 
+# run model
+d_SB1 <- list(N=nrow(nu), L=ncol(nu), Y1=Y1, Y2=Y2, nB_d=nB.d, nB_p=nB.p,
                 X_d1=X.d[[1]], X_d2=X.d[[2]], X_d3=X.d[[3]], 
-                X_d4=X.d[[4]], X_d5=X.d[[5]])
-out <- stan(file="mod_sandbox/veg_SB1_6.stan", data=d_SB1.6, thin=50, init=0)
+                X_d4=X.d[[4]], X_d5=X.d[[5]], X_p=X.p)
+out <- stan(file="mod_sandbox/veg_SB1.stan", data=d_SB1, thin=50, init=0)
 
 
 
-## visualize
+# visualize
+## nu
 gg.nu <- ggs(out, "nu") %>% arrange(Parameter, Chain, Iteration)
 nGG <- attr(gg.nu, "nChains")*attr(gg.nu, "nIterations")
 gg.nu$nu.true <- t(nu) %>% c %>% rep(each=nGG)
@@ -138,10 +156,11 @@ gg.nu <- gg.nu %>% group_by(Iteration, Chain, Cell) %>%
 ggplot(gg.nu, aes(x=nu.true, y=value)) + geom_abline(slope=1, linetype=2) +
   geom_point(alpha=0.05) + facet_wrap(~LC)
 
-gg.Bd <- ggs(out, "beta_d") %>% arrange(Parameter, Chain, Iteration)
-gg.Bd$LC <- rep(1:5, each=nGG*2) 
-gg.Bd$Bd.true <- unlist(B.d) %>% rep(each=nGG)
-ggplot(gg.Bd, aes(x=Bd.true, y=value)) + geom_abline(slope=1, linetype=3) +
+## betas
+gg.b <- ggs(out, "beta") %>% arrange(Parameter, Chain, Iteration)
+gg.b$LC <- rep(c(1:5, NA), each=nGG*3) 
+gg.b$b.true <- c(unlist(B.d), B.p) %>% rep(each=nGG)
+ggplot(gg.b, aes(x=b.true, y=value)) + geom_abline(slope=1, linetype=3) +
   geom_point(alpha=0.1)
 
 
