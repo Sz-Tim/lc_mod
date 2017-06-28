@@ -3,3 +3,7 @@
 .RData
 .Ruserdata
 .Rproj.user/
+*.rds
+EDA_FIA.Rmd
+EDA_LC.Rmd
+EDA_shared.Rmd
