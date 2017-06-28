@@ -19,6 +19,6 @@ model {
   }
   
   //likelihood
-   Y1 ~ multi_normal_cholesky(nu, L_Sigma[j]);
-   Y2 ~ multi_normal_cholesky(nu, L_Sigma[j]);
+   Y1 ~ multi_normal_cholesky(nu, L_Sigma[1]);
+   Y2 ~ multi_normal_cholesky(nu, L_Sigma[2]);
 }
