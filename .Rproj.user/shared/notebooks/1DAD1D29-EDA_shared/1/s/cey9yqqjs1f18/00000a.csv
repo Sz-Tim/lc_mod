@@ -1,2 +1,0 @@
-"0","lc.hist <- ggplot(fia.5y, aes(x=fia.LC)) + geom_bar() + xlab(""FIA LC"")"
-"0","lc.hist + facet_wrap(~nlcd.Agg) + ggtitle(""Panels: NLCD"")"

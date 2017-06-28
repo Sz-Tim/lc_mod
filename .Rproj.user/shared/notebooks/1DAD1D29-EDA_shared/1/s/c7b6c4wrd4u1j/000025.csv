@@ -1,2 +1,0 @@
-"0","plot(threshold, prAbove.nlcd*100, type=""l"", ylim=c(0,100),"
-"0","     ylab=""% of cells with dominant LC"", main=""NLCD"")"

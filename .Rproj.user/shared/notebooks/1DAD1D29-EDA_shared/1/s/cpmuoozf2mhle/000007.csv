@@ -1,6 +1,0 @@
-"0","nh.prop %>% "
-"0","  ggplot(aes(x=nlcd.LC, y=grnt.LC, fill=prop.NH)) + "
-"0","    ggtitle(""NLCD vs GRANIT: 10,000 random pts in NH"") +"
-"0","    labs(x=""NLCD"", y=""GRANIT"") +"
-"0","    geom_tile() + theme(axis.text.x=element_text(angle=270, hjust=0, vjust=0.5)) +"
-"0","    scale_fill_gradient2(low=""red"", high=""blue"", mid=""gray90"", midpoint=0, na.value=NA)"

@@ -1,3 +1,0 @@
-"0","cond.dens <- ggplot(fia.5y, aes(colour=factor(nconds))) + geom_density() +"
-"0","  scale_colour_manual(""nConditions"", values=c(""gray80"", ""gray60"", ""black""))"
-"0","cond.dens + aes(x=ba) + xlab(""Total basal area"")"

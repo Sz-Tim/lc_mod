@@ -1,4 +1,0 @@
-"0","fia.5y %>% select(conifer_tp, conifer_ba, qmd, conifer_sw, prop_conif) %>% "
-"0","  mutate(t_con_tpa=log(conifer_tp), t_prop_c=asin(sqrt(prop_conif)), t_qmd=log(qmd)) %>%"
-"0","  pairs(upper.panel=panel.cor, col=rgb(0,0,0,0.1),"
-"0","        main=""Plot totals: Conifers"")"

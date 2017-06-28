@@ -1,4 +1,0 @@
-"0","out <- stan(file=""mod_sandbox/veg_SB1_2.stan"", data=d_SB1.2, thin=50)
-"
-"2","recompiling to avoid crashing R session
-"

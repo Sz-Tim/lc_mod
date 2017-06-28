@@ -1,6 +1,0 @@
-"0","fia.5y %>% "
-"0","  select(wp_tpa, wp_ba, qmd, wp_netbdft, "
-"0","         wp_grosscu, wp_netcuft, wp_sward, prop_wp_co) %>% "
-"0","  mutate(t_wp_tpa=log(wp_tpa), t_prop_wp=asin(sqrt(prop_wp_co)), t_qmd=log(qmd)) %>%"
-"0","  pairs(upper.panel=panel.cor, col=rgb(0,0,0,0.1),"
-"0","        main=""Plot totals: White pine"")"

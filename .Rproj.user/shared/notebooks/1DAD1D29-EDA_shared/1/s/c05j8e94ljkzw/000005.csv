@@ -1,2 +1,0 @@
-"0","ggplot(fia.5y, aes(x=lon, y=lat, colour=factor(nconds))) + geom_point() +"
-"0","  scale_colour_manual(""nConditions"", values=c(""gray80"", ""gray60"", ""black""))"
