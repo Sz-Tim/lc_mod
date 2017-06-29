@@ -40,8 +40,8 @@ FIA <- runif(nrow(GRNT), 0, 1)
 
 # Rearrange LC's
 # t_mx order: [Dev, Evg, Hwd, Mxd, Other, WP]
-GRNT <- GRNT[,c(1,5,3,4,2,6)]
-colnames(GRNT) <- c("Dev", "Oth", "Hwd", "Mxd", "Evg", "WP")
+GRNT <- GRNT[,c(1,5,3,4,6,2)]
+colnames(GRNT) <- c("Dev", "Oth", "Hwd", "Mxd", "WP", "Evg")
 NLCD <- NLCD[,c(1,5,3,4,2)]
 colnames(NLCD) <- c("Dev", "Oth", "Hwd", "Mxd", "Evg")
 ```
@@ -82,7 +82,7 @@ ggplot(gg.nu, aes(x=nu.true, y=value)) + geom_abline(slope=1, linetype=2) +
 ```{r mod.hier}
 # simulate data
 ## global parameters
-nCell <- 200
+nCell <- 50
 nLC <- 6
 
 ## simulation parameters
@@ -93,32 +93,31 @@ s2.nlcd <- 0.003  # variance for nlcd LCs
 nu <- GRNT[sample(1:nrow(GRNT), nCell),]
 
 ## covariance matrices
-cov.grnt <- diag(s2.grnt, nLC, nLC)
-cov.nlcd <- diag(s2.nlcd, nLC, nLC)
+cov.grnt <- cov(GRNT)#diag(s2.grnt, nLC, nLC)
+cov.nlcd <- cov(GRNT)#diag(s2.nlcd, nLC, nLC)
 
 ## simulate bias in NLCD
 ### initialize objects
-nB.d <- 3 %>% rep(nLC-1)  # 2 covariates + 1 intercept
+nB.d <- c(3, 3, 1, 1, 1)
+B.Cov <- c(1, 1, 1, 0, 1)  # which deltas to model
 X.d <- vector("list", nLC-1)
 B.d <- X.d
 d <- matrix(nrow=nCell, ncol=nLC-1)
 ### generate betas & covariates, then calculate deltas
 for(i in 1:(nLC-1)) {
-  X.d[[i]] <- runif(nCell*(nB.d[i]-1), -1, 1) %>% matrix(nrow=nCell) %>% 
-    cbind(., rep(1, nCell))
-  B.d[[i]] <- runif(nB.d[i], -0.5, 0.5) %>% matrix(nrow=nB.d[i])
+  X.d[[i]] <- runif(nCell*(nB.d[i]), -1, 1) %>% matrix(nrow=nCell)
+  B.d[[i]] <- runif(nB.d[i], -0.5, 0.5) %>% matrix(nrow=nB.d[i])*B.Cov[i]
   d[,i] <- X.d[[i]] %*% B.d[[i]]
 }
 
 ## proportion WP|Evg
-nB.p <- 3
-B.p <- c(1.2, -0.75, 0.25)
-p.nu <- nu[,6]/(nu[,5]+nu[,6]+0.0001)
+nB.p <- 2
+B.p <- c(1.2, 0.25)
+p.nu <- nu[,5]/(nu[,5]+nu[,6]+0.0001)
 p.nu[p.nu==0] <- 0.0001; p.nu[p.nu==1] <- 0.9999
 X.p <- matrix(nrow=nCell, ncol=nB.p)
-X.p[,1] <- logit(p.nu)/B.p[1] - B.p[3]
-X.p[,2] <- (logit(p.nu) - X.p[,1]/B.p[1])/B.p[2] - B.p[3]
-X.p[,3] <- 1
+X.p[,1] <- logit(p.nu)/B.p[1] - B.p[2] + rnorm(nCell, 0, 0.5)
+X.p[,2] <- 1
 plot(antilogit(X.p %*% B.p), p.nu)
 
 ## generate Ys
@@ -132,6 +131,13 @@ for(i in 1:nCell) {
 Y2.d <- cbind(Y2.ds[,1:4], Y2.ds[,5] + Y2.ds[,6])
 ### NLCD: add bias
 Y2 <- Y2.d - d
+
+
+## transform Y's
+Y1[Y1[,6]<=0, 6] <- 0.001
+Y2[Y2[,5]<=0, 5] <- 0.001
+Y1 <- apply(Y1, 1, Z_Y_trans)
+Y2 <- apply(Y2, 1, Z_Y_trans)
 
 
 
@@ -148,6 +154,7 @@ out <- stan(file="mod_sandbox/veg_SB1.stan", data=d_SB1, thin=50, init=0)
 gg.nu <- ggs(out, "nu") %>% arrange(Parameter, Chain, Iteration)
 nGG <- attr(gg.nu, "nChains")*attr(gg.nu, "nIterations")
 gg.nu$nu.true <- t(nu) %>% c %>% rep(each=nGG)
+gg.nu$Y1 <- t(Y1) %>% c %>% rep(each=nGG)
 gg.nu$LC <- 1:6 %>% rep(each=nGG) %>% rep(times=nCell)
 gg.nu$Cell <- 1:nCell %>% rep(each=nGG*6)
 gg.nu <- gg.nu %>% group_by(Iteration, Chain, Cell) %>%
@@ -156,9 +163,18 @@ gg.nu <- gg.nu %>% group_by(Iteration, Chain, Cell) %>%
 ggplot(gg.nu, aes(x=nu.true, y=value)) + geom_abline(slope=1, linetype=2) +
   geom_point(alpha=0.05) + facet_wrap(~LC)
 
+## nu medians
+gg.med <- gg.nu %>% group_by(Cell, LC, Parameter) %>%
+  summarise(med=median(value), nu.true=first(nu.true), Y1=first(Y1)) %>%
+  ungroup() %>% group_by(Cell) %>%
+  mutate(med.eta=w_to_eta(med), med.scaled=med/sum(med),
+         med.ZY=Z_Y_trans(med))
+ggplot(gg.med, aes(x=nu.true, y=med)) +  geom_abline(slope=1, linetype=2) +
+  geom_point(alpha=0.5) + facet_wrap(~LC)
+
 ## betas
 gg.b <- ggs(out, "beta") %>% arrange(Parameter, Chain, Iteration)
-gg.b$LC <- rep(c(1:5, NA), each=nGG*3) 
+gg.b$LC <- rep(c(1:5, NA), times=nGG*c(nB.d, nB.p)) 
 gg.b$b.true <- c(unlist(B.d), B.p) %>% rep(each=nGG)
 ggplot(gg.b, aes(x=b.true, y=value)) + geom_abline(slope=1, linetype=3) +
   geom_point(alpha=0.1)
@@ -170,12 +186,10 @@ Y1.rmse <- ((nu - Y1)^2) %>% colMeans %>% sqrt
 Y2.rmse <- ((nu2 - Y2)^2) %>% colMeans %>% sqrt
 gg.nu %>% group_by(LC) %>% mutate(sdev=(nu.true-value)^2) %>%
   summarise(mod.rmse=mean(sdev) %>% sqrt %>% round(3)) %>%
-  mutate(Y1.rmse=round(Y1.rmse,3),
-         Y2.rmse=c(round(Y2.rmse,3), NA),
-         d.Y1=round(mod.rmse-Y1.rmse, 3), 
-         pD.Y1=round(d.Y1/Y1.rmse,3),
-         d.Y2=round(mod.rmse-Y2.rmse, 3), 
-         pD.Y2=round(d.Y2/Y2.rmse,3))
+  mutate(Y1.rmse=round(Y1.rmse,3), Y2.rmse=c(round(Y2.rmse,3), NA),
+         d.Y1=round(mod.rmse-Y1.rmse, 3),  pD.Y1=round(d.Y1/Y1.rmse,3),
+         d.Y2=round(mod.rmse-Y2.rmse, 3),  pD.Y2=round(d.Y2/Y2.rmse,3)) %>%
+  select(-c(d.Y1, d.Y2))
 ```
 
 
