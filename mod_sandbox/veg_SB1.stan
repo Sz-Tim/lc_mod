@@ -43,8 +43,8 @@ transformed parameters {
     //de-bias NLCD proportions
     Y2_d[n] = Y2[n] + d[n];
     //split WP to [,5] and Evg to [,6]
-    Y2_ds[n,5] = Y2_d[n,5]*(1-p[n]);
-    Y2_ds[n,6] = Y2_d[n,5]*p[n];
+    Y2_ds[n,5] = Y2_d[n,5]*(p[n]);
+    Y2_ds[n,6] = Y2_d[n,5]*(1-p[n]);
   }
   Y2_ds[,1:4] = Y2_d[,1:4];
 }
