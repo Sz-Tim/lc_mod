@@ -40,26 +40,20 @@ data {
   row_vector[L] Y2[N]; //NLCD proportions
 }
 parameters {
-  cholesky_factor_corr[L] L_Omega; //covariance matrix for Y1 & Y2 from nu
-  vector<lower=0>[L] L_sigma;
+  cholesky_factor_corr[L] L_Omega[2]; //covariance matrix for Y1 & Y2 from nu
+  vector<lower=0>[L] L_sigma[2];
   row_vector[L] nu[N];
-  row_vector[L] Z1[N]; //GRANIT proportions
-  row_vector[L] Z2[N]; //NLCD proportions
 }
 model {
   //priors
-  matrix[L,L] L_Sigma;
-  L_Sigma = diag_pre_multiply(L_sigma, L_Omega);
-  L_Omega ~ lkj_corr_cholesky(4);
-  L_sigma ~ cauchy(0, 2.5);
-  
-  for(n in 1:N) {
-    tr_gjam(Z1[n]) = Y1[n];
-    tr_gjam(Z2[n]) = Y2[n];
+  matrix[L,L] L_Sigma[2];
+  for(j in 1:2) {
+    L_Sigma[j] = diag_pre_multiply(L_sigma[j], L_Omega[j]);
+    L_Omega[j] ~ lkj_corr_cholesky(4);
+    L_sigma[j] ~ cauchy(0, 2.5);
   }
-
   
   //likelihood
-   Z1 ~ multi_normal_cholesky(nu, L_Sigma);
-   Z2 ~ multi_normal_cholesky(nu, L_Sigma);
+   Y1 ~ multi_normal_cholesky(nu, L_Sigma[1]);
+   Y2 ~ multi_normal_cholesky(nu, L_Sigma[2]);
 }
