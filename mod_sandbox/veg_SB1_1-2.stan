@@ -4,14 +4,14 @@ data {
   row_vector[L] Y1_raw[N]; //GRANIT proportions
   row_vector[L] Y2_raw[N]; //NLCD proportions
 }
-// transformed data {
-//   simplex[L] Y1[N];
-//   simplex[L] Y2[N];
-//   for(n in 1:N) {
-//     Y1[n] = softmax(Y1_raw[n]');
-//     Y2[n] = softmax(Y2_raw[n]');
-//   }
-// }
+transformed data {
+  simplex[L] Y1[N];
+  simplex[L] Y2[N];
+  for(n in 1:N) {
+    Y1[n] = softmax(Y1_raw[n]');
+    Y2[n] = softmax(Y2_raw[n]');
+  }
+}
 parameters {
   cholesky_factor_corr[L] L_Omega; //covariance matrix for Y1 & Y2 from nu
   vector<lower=0>[L] L_sigma;
