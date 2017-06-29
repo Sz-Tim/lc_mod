@@ -5,24 +5,43 @@ date: "6/13/2017"
 output: html_document
 ---
 
+# Model naming scheme  
+Each exploratory model file name begins with 'veg_SB' followed by a number representing the broad structure (currently, only sandbox 1 has really been developed). Then, models of successive complexity are numbered '_1', '_2', etc, representing:  
+
+  + '_1': Y1, Y2_ds drawn from multivariate distributions about nu  
+  + '_2': separate covariance matrices for Y1, Y2_ds (assumed)  
+  + '_3': pr(WP|Evg) as data to split Y2_d (assumed) into Y2_ds  
+  + '_4': X_d & B_d to model bias to generate Y2_d from Y2  
+  + '_5': separate X_d & B_d for each covariate  
+  + '_6': X_p & B_p to model pr(WP|Evg)  
+
+Within these categories of structural complexity, some are appended further, representing:  
+
+  + '-1': base model pretending distributions are normal  
+  + '-2': constraints using data structures and native functions  
+  + '-3': constraints using transformations  
+
 ```{r setEnv, echo=FALSE, message=FALSE}
 library(sevcheck); library(magrittr); library(tidyverse); theme_set(theme_bw())
 library(forcats); library(rstan); library(ggmcmc); library(mvtnorm)
 rstan_options(auto_write = TRUE)
 options(mc.cores = parallel::detectCores())
 
-w_to_eta <- function(w, a=0.95) {
+tr_gjam <- function(w, a=0.99) {
   eta <- w[-length(w)]
-  eta[eta < 0] <- 0
-  w.pred <- sum((eta<1)*eta + (eta>1))
-  if(w.pred > a) {
-    D.i <- (1 - (1-a)^(w.pred/a)) / w.pred
-    eta <- D.i*eta
+  eta[eta<0] <- 0
+  w.p <- sum( (eta > 0 & eta < 1)*eta + (eta > 1) )
+  
+  if(w.p >= a) {
+    while(sum(eta) > 1) {
+      D.i <- (w.p^(-1)) * (1 - ((1-a)^(w.p/a)))
+      eta <- D.i*eta
+    }
   }
-  return(c(eta, 1-sum(eta)))
+  c(eta, 1-sum(eta)) 
 }
 
-Z_Y_trans <- function(Z.v, g=2) {
+tr_lein <- function(Z.v, g=2) {
   Z.v[Z.v<0] <- 0
   Z.l <- length(Z.v) - 1
   if(Z.v[Z.l]==0) { Z.v[Z.l] <- 0.01 }
@@ -47,10 +66,10 @@ colnames(NLCD) <- c("Dev", "Oth", "Hwd", "Mxd", "Evg")
 
 
 # Simplest version
-```{r mod.simp}
+```{r veg_SB1_1}
 # simulate data
 ## set parameters
-nCell <- 20
+nCell <- 200
 nLC <- 6
 s2.grnt <- 0.001
 s2.nlcd <- s2.grnt
@@ -60,25 +79,25 @@ cell.samp <- sample(1:nrow(GRNT), nCell)
 
 ## generate data
 nu <- GRNT[cell.samp,]
-Y.grnt <- nu; Y.nlcd.dp <- nu
+Y1 <- nu; Y2.dp <- nu
 for(i in 1:nCell) {
-  Y.grnt[i,] <- rmvnorm(1, nu[i,], cov.grnt) 
-  Y.nlcd.dp[i,] <- rmvnorm(1, nu[i,], cov.grnt) 
+  Y1[i,] <- rmvnorm(1, nu[i,], cov.grnt) %>% tr_gjam()
+  Y2.dp[i,] <- rmvnorm(1, nu[i,], cov.grnt) %>% tr_gjam()
 }
-plot(Y.grnt, Y.nlcd.dp); plot(nu, Y.grnt); plot(nu, Y.nlcd.dp)
-d_SB1.2 <- list(N=nrow(nu), L=ncol(nu), Y1=Y.grnt, Y2=Y.nlcd.dp)
-out <- stan(file="mod_sandbox/veg_SB1_2.stan", data=d_SB1.2, thin=50)
+plot(Y1, Y2.dp); plot(nu, Y1); plot(nu, Y2.dp)
+d_SB1.2 <- list(N=nrow(nu), L=ncol(nu), Y1=Y1, Y2=Y2.dp)
+out <- stan(file="mod_sandbox/veg_SB1_2-1.stan", data=d_SB1.2, thin=50)
 
 gg.nu <- ggs(out, "nu") %>% arrange(Parameter, Chain, Iteration)
 nGG <- attr(gg.nu, "nChains")*attr(gg.nu, "nIterations")
 gg.nu$nu.true <- t(nu) %>% c %>% rep(each=nGG)
 gg.nu$LC <- 1:6 %>% rep(each=nGG) %>% rep(times=nCell)
 ggplot(gg.nu, aes(x=nu.true, y=value)) + geom_abline(slope=1, linetype=2) +
-  geom_point(alpha=0.02) + facet_wrap(~LC, scales="free")
+  geom_point(alpha=0.02) + facet_wrap(~LC)
 ```
 
-# Bias correction & pr(WP|Evg)
-```{r mod.hier}
+# Bias correction & pr(WP|Evg) -- NO TRANSFORMATIONS
+```{r veg_SB1_6}
 # simulate data
 ## global parameters
 nCell <- 500
@@ -132,14 +151,6 @@ Y2.d <- cbind(Y2.ds[,1:4], Y2.ds[,5] + Y2.ds[,6])
 Y2 <- Y2.d - d
 
 
-## transform Y's
-Y1[Y1[,6]<=0, 6] <- 0.001
-Y2[Y2[,5]<=0, 5] <- 0.001
-Y1 <- apply(Y1, 1, Z_Y_trans) %>% t
-Y2 <- apply(Y2, 1, Z_Y_trans) %>% t
-
-
-
 # run model
 d_SB1 <- list(N=nrow(nu), L=ncol(nu), Y1=Y1, Y2=Y2, nB_d=nB.d, nB_p=nB.p,
                 X_d1=X.d[[1]], X_d2=X.d[[2]], X_d3=X.d[[3]], 
@@ -157,8 +168,8 @@ gg.nu$Y1 <- t(Y1) %>% c %>% rep(each=nGG)
 gg.nu$LC <- 1:6 %>% rep(each=nGG) %>% rep(times=nCell)
 gg.nu$Cell <- 1:nCell %>% rep(each=nGG*6)
 gg.nu <- gg.nu %>% group_by(Iteration, Chain, Cell) %>%
-  mutate(value.eta=w_to_eta(value), value.scaled=value/sum(value),
-         value.ZY=Z_Y_trans(value))
+  mutate(value.eta=tr_gjam(value), value.scaled=value/sum(value),
+         value.ZY=tr_lein(value))
 ggplot(gg.nu, aes(x=nu.true, y=value)) + geom_abline(slope=1, linetype=2) +
   geom_point(alpha=0.05) + facet_wrap(~LC)
 
@@ -166,8 +177,8 @@ ggplot(gg.nu, aes(x=nu.true, y=value)) + geom_abline(slope=1, linetype=2) +
 gg.med <- gg.nu %>% group_by(Cell, LC, Parameter) %>%
   summarise(med=median(value), nu.true=first(nu.true), Y1=first(Y1)) %>%
   ungroup() %>% group_by(Cell) %>%
-  mutate(med.eta=w_to_eta(med), med.scaled=med/sum(med),
-         med.ZY=Z_Y_trans(med))
+  mutate(med.eta=tr_gjam(med), med.scaled=med/sum(med),
+         med.ZY=tr_lein(med))
 ggplot(gg.med, aes(x=nu.true, y=med)) +  geom_abline(slope=1, linetype=2) +
   geom_point(alpha=0.5) + facet_wrap(~LC)
 
