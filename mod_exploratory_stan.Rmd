@@ -26,8 +26,7 @@ Z_Y_trans <- function(Z.v, g=2) {
   Z.v[Z.v<0] <- 0
   Z.l <- length(Z.v) - 1
   if(Z.v[Z.l]==0) { Z.v[Z.l] <- 0.01 }
-  c((Z.v[1:Z.l]^g)/(1 + sum(Z.v[1:Z.l]^g)),
-    1/(1 + sum(Z.v[1:Z.l]^g)))
+  c((Z.v[1:Z.l]^g), 1) / (1 + sum(Z.v[1:Z.l]^g))
 }
 ```
 
@@ -55,8 +54,8 @@ nCell <- 20
 nLC <- 6
 s2.grnt <- 0.001
 s2.nlcd <- s2.grnt
-cov.grnt <- cov(GRNT)
-# cov.grnt <- diag(s2.grnt, nLC, nLC)
+# cov.grnt <- cov(GRNT)
+cov.grnt <- diag(s2.grnt, nLC, nLC)
 cell.samp <- sample(1:nrow(GRNT), nCell)
 
 ## generate data
@@ -82,7 +81,7 @@ ggplot(gg.nu, aes(x=nu.true, y=value)) + geom_abline(slope=1, linetype=2) +
 ```{r mod.hier}
 # simulate data
 ## global parameters
-nCell <- 50
+nCell <- 500
 nLC <- 6
 
 ## simulation parameters
@@ -93,8 +92,8 @@ s2.nlcd <- 0.003  # variance for nlcd LCs
 nu <- GRNT[sample(1:nrow(GRNT), nCell),]
 
 ## covariance matrices
-cov.grnt <- cov(GRNT)#diag(s2.grnt, nLC, nLC)
-cov.nlcd <- cov(GRNT)#diag(s2.nlcd, nLC, nLC)
+cov.grnt <- diag(s2.grnt, nLC, nLC)
+cov.nlcd <- diag(s2.nlcd, nLC, nLC)
 
 ## simulate bias in NLCD
 ### initialize objects
@@ -136,8 +135,8 @@ Y2 <- Y2.d - d
 ## transform Y's
 Y1[Y1[,6]<=0, 6] <- 0.001
 Y2[Y2[,5]<=0, 5] <- 0.001
-Y1 <- apply(Y1, 1, Z_Y_trans)
-Y2 <- apply(Y2, 1, Z_Y_trans)
+Y1 <- apply(Y1, 1, Z_Y_trans) %>% t
+Y2 <- apply(Y2, 1, Z_Y_trans) %>% t
 
 
 
