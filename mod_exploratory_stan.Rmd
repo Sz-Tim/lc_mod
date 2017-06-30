@@ -41,6 +41,8 @@ tr_gjam <- function(w, a=0.99) {
   c(eta, 1-sum(eta)) 
 }
 
+
+
 tr_lein <- function(Z.v, g=2) {
   Z.v[Z.v<0] <- 0
   Z.l <- length(Z.v) - 1
@@ -58,10 +60,10 @@ FIA <- runif(nrow(GRNT), 0, 1)
 
 # Rearrange LC's
 # t_mx order: [Dev, Evg, Hwd, Mxd, Other, WP]
-GRNT <- GRNT[,c(1,5,3,4,6,2)]
-colnames(GRNT) <- c("Dev", "Oth", "Hwd", "Mxd", "WP", "Evg")
-NLCD <- NLCD[,c(1,5,3,4,2)]
-colnames(NLCD) <- c("Dev", "Oth", "Hwd", "Mxd", "Evg")
+GRNT <- GRNT[,c(1,5,3,6,2,4)]
+colnames(GRNT) <- c("Dev", "Oth", "Hwd", "WP", "Evg", "Mxd")
+NLCD <- NLCD[,c(1,5,3,2,4)]
+colnames(NLCD) <- c("Dev", "Oth", "Hwd", "Evg", "Mxd")
 ```
 
 
@@ -69,38 +71,52 @@ colnames(NLCD) <- c("Dev", "Oth", "Hwd", "Mxd", "Evg")
 ```{r veg_SB1_1}
 # simulate data
 ## set parameters
-nCell <- 200
+nCell <- 1000
 nLC <- 6
 s2.grnt <- 0.001
 s2.nlcd <- s2.grnt
-# cov.grnt <- cov(GRNT)
-cov.grnt <- diag(s2.grnt, nLC, nLC)
+cov.grnt <- cov(GRNT)/4
+# cov.grnt <- diag(s2.grnt, nLC, nLC)
 cell.samp <- sample(1:nrow(GRNT), nCell)
 
 ## generate data
 nu <- GRNT[cell.samp,]
-Y1 <- nu; Y2.dp <- nu
+Y1 <- nu; Y2.ds <- nu
 for(i in 1:nCell) {
   Y1[i,] <- rmvnorm(1, nu[i,], cov.grnt) %>% tr_gjam()
-  Y2.dp[i,] <- rmvnorm(1, nu[i,], cov.grnt) %>% tr_gjam()
+  Y2.ds[i,] <- rmvnorm(1, nu[i,], cov.grnt) %>% tr_gjam()
 }
-plot(Y1, Y2.dp); plot(nu, Y1); plot(nu, Y2.dp)
-d_SB1.2 <- list(N=nrow(nu), L=ncol(nu), Y1=Y1, Y2=Y2.dp)
+plot(Y1, Y2.ds); plot(nu, Y1); plot(nu, Y2.ds)
+d_SB1.2 <- list(N=nrow(nu), L=ncol(nu), Y1=Y1, Y2=Y2.ds)
 out <- stan(file="mod_sandbox/veg_SB1_2-1.stan", data=d_SB1.2, thin=50)
 
 gg.nu <- ggs(out, "nu") %>% arrange(Parameter, Chain, Iteration)
 nGG <- attr(gg.nu, "nChains")*attr(gg.nu, "nIterations")
 gg.nu$nu.true <- t(nu) %>% c %>% rep(each=nGG)
 gg.nu$LC <- 1:6 %>% rep(each=nGG) %>% rep(times=nCell)
-ggplot(gg.nu, aes(x=nu.true, y=value)) + geom_abline(slope=1, linetype=2) +
+gg.nu$Cell <- 1:nCell %>% rep(each=nGG*6)
+gg.nu <- gg.nu %>% group_by(Iteration, Chain, Cell) %>%
+  mutate(value.eta=tr_gjam(value), value.scaled=value/sum(value),
+         value.ZY=tr_lein(value))
+ggplot(gg.nu, aes(x=nu.true, y=value.eta)) + geom_abline(slope=1, linetype=2) +
   geom_point(alpha=0.02) + facet_wrap(~LC)
+
+## RMSE
+Y1.rmse <- ((nu - Y1)^2) %>% colMeans %>% sqrt
+Y2.rmse <- ((nu - Y2.ds)^2) %>% colMeans %>% sqrt
+gg.nu %>% group_by(LC) %>% mutate(sdev=(nu.true-value)^2) %>%
+  summarise(mod.rmse=mean(sdev) %>% sqrt %>% round(3)) %>%
+  mutate(Y1.rmse=round(Y1.rmse,3), Y2.rmse=round(Y2.rmse,3),
+         d.Y1=round(mod.rmse-Y1.rmse, 3),  pD.Y1=round(d.Y1/Y1.rmse,3),
+         d.Y2=round(mod.rmse-Y2.rmse, 3),  pD.Y2=round(d.Y2/Y2.rmse,3)) %>%
+  select(-c(d.Y1, d.Y2))
 ```
 
 # Bias correction & pr(WP|Evg) -- NO TRANSFORMATIONS
 ```{r veg_SB1_6}
 # simulate data
 ## global parameters
-nCell <- 500
+nCell <- 50
 nLC <- 6
 
 ## simulation parameters
@@ -111,13 +127,13 @@ s2.nlcd <- 0.003  # variance for nlcd LCs
 nu <- GRNT[sample(1:nrow(GRNT), nCell),]
 
 ## covariance matrices
-cov.grnt <- diag(s2.grnt, nLC, nLC)
-cov.nlcd <- diag(s2.nlcd, nLC, nLC)
+cov.grnt <- cov(GRNT)/10
+cov.nlcd <- cov(GRNT)/10
 
 ## simulate bias in NLCD
 ### initialize objects
-nB.d <- c(3, 3, 1, 1, 1)
-B.Cov <- c(1, 1, 1, 0, 1)  # which deltas to model
+nB.d <- c(3, 3, 1, 1, 1)  # Dev, Oth, Hwd, Evg, Mxd
+B.Cov <- c(1, 1, 0, 1, 0)  # which deltas to model
 X.d <- vector("list", nLC-1)
 B.d <- X.d
 d <- matrix(nrow=nCell, ncol=nLC-1)
@@ -131,7 +147,7 @@ for(i in 1:(nLC-1)) {
 ## proportion WP|Evg
 nB.p <- 2
 B.p <- c(1.2, 0.25)
-p.nu <- nu[,5]/(nu[,5]+nu[,6]+0.0001)
+p.nu <- nu[,4]/(nu[,4]+nu[,5]+0.0001)
 p.nu[p.nu==0] <- 0.0001; p.nu[p.nu==1] <- 0.9999
 X.p <- matrix(nrow=nCell, ncol=nB.p)
 X.p[,1] <- logit(p.nu)/B.p[1] - B.p[2] + rnorm(nCell, 0, 0.5)
@@ -142,20 +158,21 @@ plot(antilogit(X.p %*% B.p), p.nu)
 ### GRNT, NLCD.unbiased.split
 Y1 <- nu; Y2.ds <- Y1
 for(i in 1:nCell) {
-  Y1[i,] <- rmvnorm(1, nu[i,], cov.grnt)
+  Y1[i,] <- rmvnorm(1, nu[i,], cov.grnt) %>% tr_gjam
   Y2.ds[i,] <- rmvnorm(1, nu[i,], cov.nlcd)
 }
 ### NLCD: combine WP + Evg
 Y2.d <- cbind(Y2.ds[,1:4], Y2.ds[,5] + Y2.ds[,6])
+Y2.d <- cbind(Y2.ds[,1:3], Y2.ds[,4] + Y2.ds[,5], Y2.ds[,6])
 ### NLCD: add bias
-Y2 <- Y2.d - d
-
+Y2 <- (Y2.d - d) %>% apply(., 1, tr_gjam) %>% t
+plot(Y1, Y2.ds); plot(nu, Y1); plot(nu, Y2.ds)
 
 # run model
 d_SB1 <- list(N=nrow(nu), L=ncol(nu), Y1=Y1, Y2=Y2, nB_d=nB.d, nB_p=nB.p,
                 X_d1=X.d[[1]], X_d2=X.d[[2]], X_d3=X.d[[3]], 
                 X_d4=X.d[[4]], X_d5=X.d[[5]], X_p=X.p)
-out <- stan(file="mod_sandbox/veg_SB1.stan", data=d_SB1, thin=50, init=0)
+out <- stan(file="mod_sandbox/veg_SB1_6-1.stan", data=d_SB1, thin=50, init=0)
 
 
 
@@ -172,6 +189,16 @@ gg.nu <- gg.nu %>% group_by(Iteration, Chain, Cell) %>%
          value.ZY=tr_lein(value))
 ggplot(gg.nu, aes(x=nu.true, y=value)) + geom_abline(slope=1, linetype=2) +
   geom_point(alpha=0.05) + facet_wrap(~LC)
+ggplot(gg.nu, aes(x=nu.true, y=value.eta)) + geom_abline(slope=1, linetype=2) +
+  geom_point(alpha=0.05) + facet_wrap(~LC)
+ggplot(gg.nu, aes(x=nu.true, y=value.ZY)) + geom_abline(slope=1, linetype=2) +
+  geom_point(alpha=0.05) + facet_wrap(~LC)
+ggplot(gg.nu, aes(x=nu.true, y=value.scaled)) + geom_abline(slope=1, linetype=2) +
+  geom_point(alpha=0.05) + facet_wrap(~LC)
+ggplot(gg.nu, aes(x=value, y=value.eta)) + geom_abline(slope=1, linetype=2) +
+  geom_point(alpha=0.05) + facet_wrap(~LC)
+ggplot(gg.nu, aes(x=Y1, y=value)) + geom_abline(slope=1, linetype=2) +
+  geom_point(alpha=0.05) + facet_wrap(~LC)
 
 ## nu medians
 gg.med <- gg.nu %>% group_by(Cell, LC, Parameter) %>%
@@ -180,6 +207,10 @@ gg.med <- gg.nu %>% group_by(Cell, LC, Parameter) %>%
   mutate(med.eta=tr_gjam(med), med.scaled=med/sum(med),
          med.ZY=tr_lein(med))
 ggplot(gg.med, aes(x=nu.true, y=med)) +  geom_abline(slope=1, linetype=2) +
+  geom_point(alpha=0.5) + facet_wrap(~LC)
+ggplot(gg.med, aes(x=nu.true, y=med.eta)) +  geom_abline(slope=1, linetype=2) +
+  geom_point(alpha=0.5) + facet_wrap(~LC)
+ggplot(gg.med, aes(x=nu.true, y=Y1)) +  geom_abline(slope=1, linetype=2) +
   geom_point(alpha=0.5) + facet_wrap(~LC)
 
 ## betas
@@ -194,7 +225,7 @@ ggplot(gg.b, aes(x=b.true, y=value)) + geom_abline(slope=1, linetype=3) +
 nu2 <- cbind(nu[,1:4], rowSums(nu[,5:6]))
 Y1.rmse <- ((nu - Y1)^2) %>% colMeans %>% sqrt
 Y2.rmse <- ((nu2 - Y2)^2) %>% colMeans %>% sqrt
-gg.nu %>% group_by(LC) %>% mutate(sdev=(nu.true-value)^2) %>%
+gg.nu %>% group_by(LC) %>% mutate(sdev=(nu.true-value.eta)^2) %>%
   summarise(mod.rmse=mean(sdev) %>% sqrt %>% round(3)) %>%
   mutate(Y1.rmse=round(Y1.rmse,3), Y2.rmse=c(round(Y2.rmse,3), NA),
          d.Y1=round(mod.rmse-Y1.rmse, 3),  pD.Y1=round(d.Y1/Y1.rmse,3),
