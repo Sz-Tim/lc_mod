@@ -116,7 +116,7 @@ gg.nu %>% group_by(LC) %>% mutate(sdev=(nu.true-value)^2) %>%
 ```{r veg_SB1_6}
 # simulate data
 ## global parameters
-nCell <- 50
+nCell <- 300
 nLC <- 6
 
 ## simulation parameters
@@ -158,15 +158,17 @@ plot(antilogit(X.p %*% B.p), p.nu)
 ### GRNT, NLCD.unbiased.split
 Y1 <- nu; Y2.ds <- Y1
 for(i in 1:nCell) {
-  Y1[i,] <- rmvnorm(1, nu[i,], cov.grnt) %>% tr_gjam
+  Y1[i,] <- rmvnorm(1, nu[i,], cov.grnt) #%>% tr_gjam
   Y2.ds[i,] <- rmvnorm(1, nu[i,], cov.nlcd)
 }
 ### NLCD: combine WP + Evg
 Y2.d <- cbind(Y2.ds[,1:4], Y2.ds[,5] + Y2.ds[,6])
 Y2.d <- cbind(Y2.ds[,1:3], Y2.ds[,4] + Y2.ds[,5], Y2.ds[,6])
 ### NLCD: add bias
-Y2 <- (Y2.d - d) %>% apply(., 1, tr_gjam) %>% t
-plot(Y1, Y2.ds); plot(nu, Y1); plot(nu, Y2.ds)
+Y2 <- (Y2.d - d)# %>% apply(., 1, tr_gjam) %>% t
+plot(cbind(Y1[,1:3], Y1[,4]+Y1[,5], Y1[,6]), Y2)
+plot(nu, Y1) 
+plot(cbind(nu[,1:3], nu[,4]+nu[,5], nu[,6]), Y2)
 
 # run model
 d_SB1 <- list(N=nrow(nu), L=ncol(nu), Y1=Y1, Y2=Y2, nB_d=nB.d, nB_p=nB.p,
@@ -222,12 +224,12 @@ ggplot(gg.b, aes(x=b.true, y=value)) + geom_abline(slope=1, linetype=3) +
 
 
 ## RMSE
-nu2 <- cbind(nu[,1:4], rowSums(nu[,5:6]))
+nu2 <- cbind(nu[,1:3], NA, rowSums(nu[,4:5]), nu[,6])
 Y1.rmse <- ((nu - Y1)^2) %>% colMeans %>% sqrt
-Y2.rmse <- ((nu2 - Y2)^2) %>% colMeans %>% sqrt
+Y2.rmse <- ((nu2 - cbind(Y2[,1:3], NA, Y2[,4:5]))^2) %>% colMeans %>% sqrt
 gg.nu %>% group_by(LC) %>% mutate(sdev=(nu.true-value.eta)^2) %>%
   summarise(mod.rmse=mean(sdev) %>% sqrt %>% round(3)) %>%
-  mutate(Y1.rmse=round(Y1.rmse,3), Y2.rmse=c(round(Y2.rmse,3), NA),
+  mutate(Y1.rmse=round(Y1.rmse,3), Y2.rmse=c(round(Y2.rmse,3)),
          d.Y1=round(mod.rmse-Y1.rmse, 3),  pD.Y1=round(d.Y1/Y1.rmse,3),
          d.Y2=round(mod.rmse-Y2.rmse, 3),  pD.Y2=round(d.Y2/Y2.rmse,3)) %>%
   select(-c(d.Y1, d.Y2))
