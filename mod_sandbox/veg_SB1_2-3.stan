@@ -24,8 +24,8 @@ functions {
       }
     }
     w_pred = l1_sum + g1_sum;
-    if(w_pred > 0.9) {
-      D_i = (1 - (0.1)^(w_pred/0.9)) / w_pred;
+    if(w_pred > 0.95) {
+      D_i = (1 - (0.05)^(w_pred/0.95)) / w_pred;
       eta = D_i * eta;
     }
     eta_full[1:(L-1)] = eta;
