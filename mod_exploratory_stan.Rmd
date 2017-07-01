@@ -124,7 +124,7 @@ ggplot(gg.nu, aes(x=value.1, y=value.2)) + geom_abline(slope=1, linetype=2) +
 ## RMSE
 Y1.rmse <- ((nu - Y1)^2) %>% colMeans %>% sqrt
 Y2.rmse <- ((nu - Y2.ds)^2) %>% colMeans %>% sqrt
-gg.nu1 %>% group_by(LC) %>% mutate(sdev=(nu.true-value)^2) %>%
+gg.nu %>% group_by(LC) %>% mutate(sdev=(nu.true-value.1)^2) %>%
   summarise(mod.rmse=mean(sdev) %>% sqrt %>% round(3)) %>%
   mutate(Y1.rmse=round(Y1.rmse,3), Y2.rmse=round(Y2.rmse,3),
          d.Y1=round(mod.rmse-Y1.rmse, 3),  pD.Y1=round(d.Y1/Y1.rmse,3),
