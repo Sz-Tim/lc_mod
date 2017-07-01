@@ -45,6 +45,8 @@ parameters {
   row_vector[L] nu[N];
 }
 model {
+  row_vector[L] Z1[N];
+  row_vector[L] Z2[N];
   //priors
   matrix[L,L] L_Sigma[2];
   for(j in 1:2) {
