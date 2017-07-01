@@ -23,11 +23,11 @@ Within these categories of structural complexity, some are appended further, rep
 
 ```{r setEnv, echo=FALSE, message=FALSE}
 library(sevcheck); library(magrittr); library(tidyverse); theme_set(theme_bw())
-library(forcats); library(rstan); library(ggmcmc); library(mvtnorm)
+library(forcats); library(rstan); library(ggmcmc); library(mvtnorm); library(msm)
 rstan_options(auto_write = TRUE)
 options(mc.cores = parallel::detectCores())
 
-tr_gjam <- function(w, a=0.99) {
+tr_gjam_inv <- function(w, a=0.99) {
   eta <- w[-length(w)]
   eta[eta<0] <- 0
   w.p <- sum( (eta > 0 & eta < 1)*eta + (eta > 1) )
@@ -41,6 +41,17 @@ tr_gjam <- function(w, a=0.99) {
   c(eta, 1-sum(eta)) 
 }
 
+
+tr_gjam <- function(eta, a=0.95) {
+  w <- eta
+  eta.p <- sum(eta[-length(eta)])
+  if(eta.p > a) {
+    C.i <- (eta.p^(-1)) * a * (log(1-eta.p)/log(1-a))
+    w <- C.i*eta
+  }
+  w[w==0] <- rtnorm(sum(w==0), mean=0, sd=0.25, upper=0)
+  w
+}
 
 
 tr_lein <- function(Z.v, g=2) {
@@ -71,7 +82,7 @@ colnames(NLCD) <- c("Dev", "Oth", "Hwd", "Evg", "Mxd")
 ```{r veg_SB1_1}
 # simulate data
 ## set parameters
-nCell <- 1000
+nCell <- 10
 nLC <- 6
 s2.grnt <- 0.001
 s2.nlcd <- s2.grnt
@@ -83,21 +94,25 @@ cell.samp <- sample(1:nrow(GRNT), nCell)
 ## generate data
 nu <- GRNT[cell.samp,]
 Y1 <- nu; Y2.ds <- nu
+Y1.inv <- nu; Y2.inv <- nu
+Y1.inv.inv <- nu; Y2.inv.inv <- nu
 for(i in 1:nCell) {
-  Y1[i,] <- rmvnorm(1, nu[i,], cov.grnt) %>% tr_gjam()
-  Y2.ds[i,] <- rmvnorm(1, nu[i,], cov.nlcd) %>% tr_gjam()
+  Y1[i,] <- rmvnorm(1, nu[i,], cov.grnt) %>% tr_gjam_inv() 
+  Y2.ds[i,] <- rmvnorm(1, nu[i,], cov.nlcd) %>% tr_gjam_inv() 
 }
 plot(Y1, Y2.ds); plot(nu, Y1); plot(nu, Y2.ds)
 
-Y1[Y1==0] <- 1e-17
-Y2.ds[Y2.ds==0] <- 1e-17
+# Y1[Y1==0] <- 1e-17
+# Y2.ds[Y2.ds==0] <- 1e-17
 d_SB1.2 <- list(N=nrow(nu), L=ncol(nu), Y1=Y1, Y2=Y2.ds, alpha=colMeans(nu))
 
+inits <- colMeans(nu) %>% rep(nCell) %>% matrix(nrow=nCell, byrow=TRUE) %>%
+  list(nu=.) %>% list %>% rep(4)
 
 # run models
 out1 <- stan(file="mod_sandbox/veg_SB1_2-1.stan", data=d_SB1.2, thin=50)
-out2 <- stan(file="mod_sandbox/veg_SB1_2-2.stan", data=d_SB1.2, thin=50)
-# out3 <- stan(file="mod_sandbox/veg_SB1_2-3.stan", data=d_SB1.2, thin=50)
+# out2 <- stan(file="mod_sandbox/veg_SB1_2-2.stan", data=d_SB1.2, thin=50)
+out3 <- stan(file="mod_sandbox/veg_SB1_2-3.stan", data=d_SB1.2, thin=50)#, init=inits)
 
 gg.nu <- ggs(out1, "nu") %>% arrange(Parameter, Chain, Iteration)
 nGG <- attr(gg.nu, "nChains")*attr(gg.nu, "nIterations")
@@ -105,11 +120,11 @@ gg.nu <- gg.nu %>% rename(value.1=value) %>%
   mutate(nu.true = t(nu) %>% c %>% rep(each=nGG),
          LC = 1:6 %>% rep(each=nGG) %>% rep(times=nCell),
          Cell = 1:nCell %>% rep(each=nGG*6),
-         value.2 = ggs(out2, "nu") %>% 
+         value.2 = ggs(out3, "nu") %>% 
            arrange(Parameter, Chain, Iteration) %>% .$value) %>% 
   group_by(Iteration, Chain, Cell) %>%
-  mutate(value.1.eta=tr_gjam(value.1), value.1.scaled=value.1/sum(value.1),
-         value.1.ZY=tr_lein(value.1), value.2.eta=tr_gjam(value.2),
+  mutate(value.1.eta=tr_gjam_inv(value.1), value.1.scaled=value.1/sum(value.1),
+         value.1.ZY=tr_lein(value.1), value.2.eta=tr_gjam_inv(value.2),
          value.2.scaled=value.2/sum(value.2), value.2.ZY=tr_lein(value.2))
 ggplot(gg.nu, aes(x=nu.true, y=value.1)) + geom_abline(slope=1, linetype=2) +
   geom_point(alpha=0.02) + facet_wrap(~LC)
@@ -125,11 +140,7 @@ ggplot(gg.nu, aes(x=value.1, y=value.2)) + geom_abline(slope=1, linetype=2) +
 ## RMSE
 Y1.rmse <- ((nu - Y1)^2) %>% colMeans %>% sqrt
 Y2.rmse <- ((nu - Y2.ds)^2) %>% colMeans %>% sqrt
-<<<<<<< HEAD
-gg.nu %>% group_by(LC) %>% mutate(sdev=(nu.true-value.1.eta)^2) %>%
-=======
 gg.nu %>% group_by(LC) %>% mutate(sdev=(nu.true-value.1)^2) %>%
->>>>>>> e21ee49b203107a64453941c33078a9b9dfb84a1
   summarise(mod.rmse=mean(sdev) %>% sqrt %>% round(3)) %>%
   mutate(Y1.rmse=round(Y1.rmse,3), Y2.rmse=round(Y2.rmse,3),
          d.Y1=round(mod.rmse-Y1.rmse, 3),  pD.Y1=round(d.Y1/Y1.rmse,3),
@@ -183,14 +194,14 @@ plot(antilogit(X.p %*% B.p), p.nu)
 ### GRNT, NLCD.unbiased.split
 Y1 <- nu; Y2.ds <- Y1
 for(i in 1:nCell) {
-  Y1[i,] <- rmvnorm(1, nu[i,], cov.grnt) #%>% tr_gjam
+  Y1[i,] <- rmvnorm(1, nu[i,], cov.grnt) #%>% tr_gjam_inv
   Y2.ds[i,] <- rmvnorm(1, nu[i,], cov.nlcd)
 }
 ### NLCD: combine WP + Evg
 Y2.d <- cbind(Y2.ds[,1:4], Y2.ds[,5] + Y2.ds[,6])
 Y2.d <- cbind(Y2.ds[,1:3], Y2.ds[,4] + Y2.ds[,5], Y2.ds[,6])
 ### NLCD: add bias
-Y2 <- (Y2.d - d)# %>% apply(., 1, tr_gjam) %>% t
+Y2 <- (Y2.d - d)# %>% apply(., 1, tr_gjam_inv) %>% t
 plot(cbind(Y1[,1:3], Y1[,4]+Y1[,5], Y1[,6]), Y2)
 plot(nu, Y1) 
 plot(cbind(nu[,1:3], nu[,4]+nu[,5], nu[,6]), Y2)
@@ -212,7 +223,7 @@ gg.nu$Y1 <- t(Y1) %>% c %>% rep(each=nGG)
 gg.nu$LC <- 1:6 %>% rep(each=nGG) %>% rep(times=nCell)
 gg.nu$Cell <- 1:nCell %>% rep(each=nGG*6)
 gg.nu <- gg.nu %>% group_by(Iteration, Chain, Cell) %>%
-  mutate(value.eta=tr_gjam(value), value.scaled=value/sum(value),
+  mutate(value.eta=tr_gjam_inv(value), value.scaled=value/sum(value),
          value.ZY=tr_lein(value))
 ggplot(gg.nu, aes(x=nu.true, y=value)) + geom_abline(slope=1, linetype=2) +
   geom_point(alpha=0.05) + facet_wrap(~LC)
@@ -231,7 +242,7 @@ ggplot(gg.nu, aes(x=Y1, y=value)) + geom_abline(slope=1, linetype=2) +
 gg.med <- gg.nu %>% group_by(Cell, LC, Parameter) %>%
   summarise(med=median(value), nu.true=first(nu.true), Y1=first(Y1)) %>%
   ungroup() %>% group_by(Cell) %>%
-  mutate(med.eta=tr_gjam(med), med.scaled=med/sum(med),
+  mutate(med.eta=tr_gjam_inv(med), med.scaled=med/sum(med),
          med.ZY=tr_lein(med))
 ggplot(gg.med, aes(x=nu.true, y=med)) +  geom_abline(slope=1, linetype=2) +
   geom_point(alpha=0.5) + facet_wrap(~LC)
