@@ -1,36 +1,27 @@
 functions {
-  row_vector tr_gjam(row_vector w) {
-    int L;
-    row_vector[L-1] eta;
-    real w_pred;
-    real D_i;
-    row_vector[L] eta_full;
-    real l1_sum;
-    real g1_sum;
+  row_vector tr_gjam_rng(row_vector eta) {
+    row_vector[6] w;
+    real eta_p;
+    real C_i;
     
-    L = num_elements(w);
-    l1_sum = 0;
-    g1_sum = 0;
+    eta_p = sum(eta[1:5]);
     
-    eta = w[1:(L-1)];
-    for(i in 1:num_elements(eta)) {
-      if(eta[i] < 0) {
-        eta[i] = 0;
-      }
-      if(eta[i] < 1) {
-        l1_sum = l1_sum + eta[i];
-      } else {
-        g1_sum = g1_sum + eta[i];
+    if(eta_p > 0.99) {
+      C_i = (eta_p^(-1)) * 0.99 * (log(1-eta_p)/log(0.01));
+      w = C_i*eta;
+    } else {
+      w = eta;
+    }
+    
+    for(i in 1:num_elements(w)) {
+      if(w[i]==0) {
+        while(w[i]>=0) {
+          w[i] = normal_rng(0, 0.5);
+          // w[i] = -0.5;
+        }
       }
     }
-    w_pred = l1_sum + g1_sum;
-    if(w_pred > 0.95) {
-      D_i = (1 - (0.05)^(w_pred/0.95)) / w_pred;
-      eta = D_i * eta;
-    }
-    eta_full[1:(L-1)] = eta;
-    eta_full[L] = 1 - sum(eta);
-    return eta_full;
+    return w;
   }
 }
 data {
@@ -39,14 +30,20 @@ data {
   row_vector[L] Y1[N]; //GRANIT proportions
   row_vector[L] Y2[N]; //NLCD proportions
 }
+transformed data {
+  row_vector[L] Z1[N];
+  row_vector[L] Z2[N];
+  for(n in 1:N) {
+    Z1[n] = tr_gjam_rng(Y1[n]);
+    Z2[n] = tr_gjam_rng(Y2[n]);
+  }
+}
 parameters {
   cholesky_factor_corr[L] L_Omega[2]; //covariance matrix for Y1 & Y2 from nu
   vector<lower=0>[L] L_sigma[2];
   row_vector[L] nu[N];
 }
 model {
-  row_vector[L] Z1[N];
-  row_vector[L] Z2[N];
   //priors
   matrix[L,L] L_Sigma[2];
   for(j in 1:2) {
@@ -56,6 +53,6 @@ model {
   }
   
   //likelihood
-   Y1 ~ multi_normal_cholesky(nu, L_Sigma[1]);
-   Y2 ~ multi_normal_cholesky(nu, L_Sigma[2]);
+   Z1 ~ multi_normal_cholesky(nu, L_Sigma[1]);
+   Z2 ~ multi_normal_cholesky(nu, L_Sigma[2]);
 }
