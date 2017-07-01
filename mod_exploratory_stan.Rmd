@@ -71,12 +71,12 @@ colnames(NLCD) <- c("Dev", "Oth", "Hwd", "Evg", "Mxd")
 ```{r veg_SB1_1}
 # simulate data
 ## set parameters
-nCell <- 100
+nCell <- 1000
 nLC <- 6
 s2.grnt <- 0.001
 s2.nlcd <- s2.grnt
 cov.grnt <- cov(GRNT)/8
-cov.nlcd <- cov(GRNT)/10
+cov.nlcd <- cov(GRNT)/6
 # cov.grnt <- diag(s2.grnt, nLC, nLC)
 cell.samp <- sample(1:nrow(GRNT), nCell)
 
@@ -93,14 +93,11 @@ Y1[Y1==0] <- 1e-17
 Y2.ds[Y2.ds==0] <- 1e-17
 d_SB1.2 <- list(N=nrow(nu), L=ncol(nu), Y1=Y1, Y2=Y2.ds, alpha=colMeans(nu))
 
-inits.2 <- colMeans(nu) %>% rep(nCell) %>% matrix(ncol=nLC, byrow=TRUE) %>% 
-  list(nu=.) %>% list() %>% rep(4)
-
 
 # run models
 out1 <- stan(file="mod_sandbox/veg_SB1_2-1.stan", data=d_SB1.2, thin=50)
 out2 <- stan(file="mod_sandbox/veg_SB1_2-2.stan", data=d_SB1.2, thin=50)
-out3 <- stan(file="mod_sandbox/veg_SB1_2-3.stan", data=d_SB1.2, thin=50)
+# out3 <- stan(file="mod_sandbox/veg_SB1_2-3.stan", data=d_SB1.2, thin=50)
 
 gg.nu <- ggs(out1, "nu") %>% arrange(Parameter, Chain, Iteration)
 nGG <- attr(gg.nu, "nChains")*attr(gg.nu, "nIterations")
@@ -116,7 +113,11 @@ gg.nu <- gg.nu %>% rename(value.1=value) %>%
          value.2.scaled=value.2/sum(value.2), value.2.ZY=tr_lein(value.2))
 ggplot(gg.nu, aes(x=nu.true, y=value.1)) + geom_abline(slope=1, linetype=2) +
   geom_point(alpha=0.02) + facet_wrap(~LC)
+ggplot(gg.nu, aes(x=nu.true, y=value.1.eta)) + geom_abline(slope=1, linetype=2) +
+  geom_point(alpha=0.02) + facet_wrap(~LC)
 ggplot(gg.nu, aes(x=nu.true, y=value.2)) + geom_abline(slope=1, linetype=2) +
+  geom_point(alpha=0.02) + facet_wrap(~LC)
+ggplot(gg.nu, aes(x=nu.true, y=value.2.eta)) + geom_abline(slope=1, linetype=2) +
   geom_point(alpha=0.02) + facet_wrap(~LC)
 ggplot(gg.nu, aes(x=value.1, y=value.2)) + geom_abline(slope=1, linetype=2) +
   geom_point(alpha=0.02) + facet_wrap(~LC)
@@ -124,7 +125,7 @@ ggplot(gg.nu, aes(x=value.1, y=value.2)) + geom_abline(slope=1, linetype=2) +
 ## RMSE
 Y1.rmse <- ((nu - Y1)^2) %>% colMeans %>% sqrt
 Y2.rmse <- ((nu - Y2.ds)^2) %>% colMeans %>% sqrt
-gg.nu1 %>% group_by(LC) %>% mutate(sdev=(nu.true-value)^2) %>%
+gg.nu %>% group_by(LC) %>% mutate(sdev=(nu.true-value.1.eta)^2) %>%
   summarise(mod.rmse=mean(sdev) %>% sqrt %>% round(3)) %>%
   mutate(Y1.rmse=round(Y1.rmse,3), Y2.rmse=round(Y2.rmse,3),
          d.Y1=round(mod.rmse-Y1.rmse, 3),  pD.Y1=round(d.Y1/Y1.rmse,3),
