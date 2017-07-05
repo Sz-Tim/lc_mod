@@ -76,9 +76,11 @@ transformed parameters {
   d[,4] = X_d4 * beta_d4;
   // d[,5] = X_d5 * beta_d5;
   
+  //bias terms set to 0
+  d[,3] = to_vector(rep_array(0, N));
+  d[,5] = to_vector(rep_array(0, N));
+  
   for(n in 1:N) {                       // POSSIBLE TO VECTORIZE? //
-    d[n,3] = 0;
-    d[n,5] = 0;
     //nu to eta
     n_eta[n] = tr_gjam_inv(nu[n])';
     //de-bias NLCD proportions
@@ -98,10 +100,11 @@ model {
     L_Omega[j] ~ lkj_corr_cholesky(4);
     L_sigma[j] ~ cauchy(0, 2.5);
   }
-  for(n in 1:N) {
-    // nu[n] ~ uniform(0,1);
-    nu[n] ~ normal(0.5,1);
+ 
+  for(l in 1:L) {
+    nu[,l] ~ normal(0.5, 1);
   }
+  
   beta_p ~ normal(0, 1);
   to_vector(beta_d1) ~ normal(0, 1);
   to_vector(beta_d2) ~ normal(0, 1);
