@@ -125,11 +125,7 @@ ggplot(gg.nu, aes(x=value.1, y=value.2)) + geom_abline(slope=1, linetype=2) +
 ## RMSE
 Y1.rmse <- ((nu - Y1)^2) %>% colMeans %>% sqrt
 Y2.rmse <- ((nu - Y2.ds)^2) %>% colMeans %>% sqrt
-<<<<<<< HEAD
-gg.nu %>% group_by(LC) %>% mutate(sdev=(nu.true-value.1.eta)^2) %>%
-=======
 gg.nu %>% group_by(LC) %>% mutate(sdev=(nu.true-value.1)^2) %>%
->>>>>>> e21ee49b203107a64453941c33078a9b9dfb84a1
   summarise(mod.rmse=mean(sdev) %>% sqrt %>% round(3)) %>%
   mutate(Y1.rmse=round(Y1.rmse,3), Y2.rmse=round(Y2.rmse,3),
          d.Y1=round(mod.rmse-Y1.rmse, 3),  pD.Y1=round(d.Y1/Y1.rmse,3),
@@ -137,11 +133,15 @@ gg.nu %>% group_by(LC) %>% mutate(sdev=(nu.true-value.1)^2) %>%
   select(-c(d.Y1, d.Y2))
 ```
 
+
+
+
+
 # Bias correction & pr(WP|Evg) -- NO TRANSFORMATIONS
 ```{r veg_SB1_6}
 # simulate data
 ## global parameters
-nCell <- 300
+nCell <- 500
 nLC <- 6
 
 ## simulation parameters
@@ -158,13 +158,13 @@ cov.nlcd <- cov(GRNT)/10
 ## simulate bias in NLCD
 ### initialize objects
 nB.d <- c(3, 3, 1, 1, 1)  # Dev, Oth, Hwd, Evg, Mxd
-B.Cov <- c(1, 1, 0, 1, 0)  # which deltas to model
+B.Cov <- c(1, 1, 0, 2, 0)  # which deltas to model
 X.d <- vector("list", nLC-1)
 B.d <- X.d
 d <- matrix(nrow=nCell, ncol=nLC-1)
 ### generate betas & covariates, then calculate deltas
 for(i in 1:(nLC-1)) {
-  X.d[[i]] <- runif(nCell*(nB.d[i]), -1, 1) %>% matrix(nrow=nCell)
+  X.d[[i]] <- runif(nCell*(nB.d[i]), -1, 1) %>% matrix(nrow=nCell)*B.Cov[i]
   B.d[[i]] <- runif(nB.d[i], -0.5, 0.5) %>% matrix(nrow=nB.d[i])*B.Cov[i]
   d[,i] <- X.d[[i]] %*% B.d[[i]]
 }
@@ -183,14 +183,14 @@ plot(antilogit(X.p %*% B.p), p.nu)
 ### GRNT, NLCD.unbiased.split
 Y1 <- nu; Y2.ds <- Y1
 for(i in 1:nCell) {
-  Y1[i,] <- rmvnorm(1, nu[i,], cov.grnt) #%>% tr_gjam
+  Y1[i,] <- rmvnorm(1, nu[i,], cov.grnt) %>% tr_gjam
   Y2.ds[i,] <- rmvnorm(1, nu[i,], cov.nlcd)
 }
 ### NLCD: combine WP + Evg
 Y2.d <- cbind(Y2.ds[,1:4], Y2.ds[,5] + Y2.ds[,6])
 Y2.d <- cbind(Y2.ds[,1:3], Y2.ds[,4] + Y2.ds[,5], Y2.ds[,6])
 ### NLCD: add bias
-Y2 <- (Y2.d - d)# %>% apply(., 1, tr_gjam) %>% t
+Y2 <- (Y2.d - d) %>% apply(., 1, tr_gjam) %>% t
 plot(cbind(Y1[,1:3], Y1[,4]+Y1[,5], Y1[,6]), Y2)
 plot(nu, Y1) 
 plot(cbind(nu[,1:3], nu[,4]+nu[,5], nu[,6]), Y2)
