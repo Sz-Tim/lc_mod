@@ -8,21 +8,20 @@ data {
   matrix[N,nB_p] X_p;  //pr(WP|Evg) covariates
   matrix[N,nB_d[1]] X_d1;  //bias covariates: Dev
   matrix[N,nB_d[2]] X_d2;  //bias covariates: Oth
-  matrix[N,nB_d[3]] X_d3;  //bias covariates: Hwd
+  // matrix[N,nB_d[3]] X_d3;  //bias covariates: Hwd
   matrix[N,nB_d[4]] X_d4;  //bias covariates: Evg
-  matrix[N,nB_d[5]] X_d5;  //bias covariates: Mxd
+  // matrix[N,nB_d[5]] X_d5;  //bias covariates: Mxd
 }
 parameters {
   cholesky_factor_corr[L] L_Omega[2]; //covariance matrix for Y1 & Y2
   vector<lower=0>[L] L_sigma[2];  //covariance matrix for Y1 & Y2
   row_vector<lower=0, upper=1>[L] nu[N];  //latent LC proportions
-  // row_vector[L] nu[N];  //latent LC proportions
   vector[nB_p] beta_p;  //pr(WP|Evg) betas
   vector[nB_d[1]] beta_d1;  //bias betas: Dev
   vector[nB_d[2]] beta_d2;  //bias betas: Oth
-  vector[nB_d[3]] beta_d3;  //bias betas: Hwd
+  // vector[nB_d[3]] beta_d3;  //bias betas: Hwd
   vector[nB_d[4]] beta_d4;  //bias betas: Evg
-  vector[nB_d[5]] beta_d5;  //bias betas: Mxd
+  // vector[nB_d[5]] beta_d5;  //bias betas: Mxd
 }
 transformed parameters {
   vector<lower=0, upper=1>[N] p;  //pr(WP|Evg)
@@ -36,12 +35,14 @@ transformed parameters {
   //estimate bias
   d[,1] = X_d1 * beta_d1;
   d[,2] = X_d2 * beta_d2;
-  d[,3] = X_d3 * beta_d3;
+  // d[,3] = X_d3 * beta_d3;
   d[,4] = X_d4 * beta_d4;
-  d[,5] = X_d5 * beta_d5;
+  // d[,5] = X_d5 * beta_d5;
   
   for(n in 1:N) {                       // POSSIBLE TO VECTORIZE? //
     //de-bias NLCD proportions
+    d[n,3] = 0;
+    d[n,5] = 0;
     Y2_d[n] = Y2[n] + d[n];
     //split WP to [,4] and Evg to [,5]
     Y2_ds[n,4] = Y2_d[n,4]*(p[n]);
@@ -65,9 +66,9 @@ model {
   beta_p ~ normal(0, 1);
   to_vector(beta_d1) ~ normal(0, 1);
   to_vector(beta_d2) ~ normal(0, 1);
-  to_vector(beta_d3) ~ normal(0, 1);
+  // to_vector(beta_d3) ~ normal(0, 1);
   to_vector(beta_d4) ~ normal(0, 1);
-  to_vector(beta_d5) ~ normal(0, 1);
+  // to_vector(beta_d5) ~ normal(0, 1);
   
   //likelihood
    Y1 ~ multi_normal_cholesky(nu, L_Sigma[1]);
