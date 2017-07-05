@@ -61,7 +61,6 @@ model {
   }
   for(n in 1:N) {
     nu[n] ~ uniform(0,1);
-    // nu[n] ~ normal(0.5,1);
   }
   beta_p ~ normal(0, 1);
   to_vector(beta_d1) ~ normal(0, 1);
