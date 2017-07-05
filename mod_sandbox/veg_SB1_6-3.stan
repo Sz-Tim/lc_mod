@@ -1,3 +1,39 @@
+functions {
+  row_vector tr_gjam_inv(row_vector w) {
+    row_vector[6] eta;
+    real w_p;
+    real D_i;
+    real ls_1;
+    int gr_1;
+    
+    eta = w;
+    ls_1 = 0;
+    gr_1 = 0;
+    
+    for(l in 1:5) {
+      if(eta[l] < 0) {
+        eta[l] = 0;
+      }
+      if(eta[l] < 1) {
+        ls_1 = ls_1 + eta[l];
+      } else {
+        gr_1 = gr_1 + 1;
+      }
+    }
+    w_p = ls_1 + gr_1;
+    
+    if(w_p >= 0.99) {
+      row_vector[5] tmp;
+      D_i = (w_p^(-1)) * (1 - (0.01)^(w_p/0.99));
+      while(sum(eta[1:5]) > 0.99) {
+        tmp = D_i * eta[1:5];
+        eta[1:5] = tmp;
+      }
+    }
+    eta[6] = 1 - sum(eta[1:5]);
+    return eta;
+  }
+}
 data {
   int N;  //number of grid cells
   int L;  //number of land cover classes
@@ -15,7 +51,7 @@ data {
 parameters {
   cholesky_factor_corr[L] L_Omega[2]; //covariance matrix for Y1 & Y2
   vector<lower=0>[L] L_sigma[2];  //covariance matrix for Y1 & Y2
-  row_vector<lower=0, upper=1>[L] nu[N];  //latent LC proportions
+  row_vector[L] nu[N];  //latent LC proportions
   vector[nB_p] beta_p;  //pr(WP|Evg) betas
   vector[nB_d[1]] beta_d1;  //bias betas: Dev
   vector[nB_d[2]] beta_d2;  //bias betas: Oth
@@ -28,6 +64,7 @@ transformed parameters {
   row_vector[L-1] Y2_d[N];  //de-biased NLCD proportions
   row_vector[L] Y2_ds[N];  //de-biased and split NLCD proportions
   matrix<lower=-1, upper=1>[N,L-1] d; //bias between NLCD and nu
+  simplex[L] n_eta[N];
   
   //pr(WP|Evg)
   p = inv_logit(X_p * beta_p);
@@ -40,9 +77,11 @@ transformed parameters {
   // d[,5] = X_d5 * beta_d5;
   
   for(n in 1:N) {                       // POSSIBLE TO VECTORIZE? //
-    //de-bias NLCD proportions
     d[n,3] = 0;
     d[n,5] = 0;
+    //nu to eta
+    n_eta[n] = tr_gjam_inv(nu[n])';
+    //de-bias NLCD proportions
     Y2_d[n] = Y2[n] + d[n];
     //split WP to [,4] and Evg to [,5]
     Y2_ds[n,4] = Y2_d[n,4]*(p[n]);
@@ -60,8 +99,8 @@ model {
     L_sigma[j] ~ cauchy(0, 2.5);
   }
   for(n in 1:N) {
-    nu[n] ~ uniform(0,1);
-    // nu[n] ~ normal(0.5,1);
+    // nu[n] ~ uniform(0,1);
+    nu[n] ~ normal(0.5,1);
   }
   beta_p ~ normal(0, 1);
   to_vector(beta_d1) ~ normal(0, 1);
