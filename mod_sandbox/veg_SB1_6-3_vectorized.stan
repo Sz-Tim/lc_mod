@@ -64,9 +64,9 @@ parameters {
 
 transformed parameters {
   vector<lower=0, upper=1>[N] p;  //pr(WP|Evg)
-  matrix[N,L] Y2_ds;
-  vector[N] d_Evg; //bias between NLCD and nu
-  simplex[L] n_eta[N];
+  row_vector[L] Y2_ds[N];  //unbiased, split NLCD
+  vector[N] d_Evg;  //bias between NLCD and nu
+  simplex[L] n_eta[N];  //gjam transformed nu
   
   //pr(WP|Evg)
   p = inv_logit(X_p * beta_p);
@@ -75,12 +75,12 @@ transformed parameters {
   d_Evg = X_d4 * beta_d4;
   
   //add bias & split WP to [,4] and Evg to [,5]
-  Y2_ds[,1] = Y2[,1] + (X_d1 * beta_d1);
-  Y2_ds[,2] = Y2[,1] + (X_d2 * beta_d2);
-  Y2_ds[,3] = Y2[,1];
-  Y2_ds[,4] = (Y2[,4] + d_Evg) .* p;
-  Y2_ds[,5] = (Y2[,4] + d_Evg) .* (1-p);
-  Y2_ds[,6] = Y2[,5];
+  Y2_ds[,1] = to_array_1d(Y2[,1] + (X_d1 * beta_d1));
+  Y2_ds[,2] = to_array_1d(Y2[,1] + (X_d2 * beta_d2));
+  Y2_ds[,3] = to_array_1d(Y2[,1]);
+  Y2_ds[,4] = to_array_1d((Y2[,4] + d_Evg) .* p);
+  Y2_ds[,5] = to_array_1d((Y2[,4] + d_Evg) .* (1-p));
+  Y2_ds[,6] = to_array_1d(Y2[,5]);
   
   //nu to eta
   for(n in 1:N) {
@@ -90,7 +90,6 @@ transformed parameters {
 
 model {
   matrix[L,L] L_Sigma[2];
-  row_vector[L] Y2_ds_a[N];
   
   //covariance priors
   for(j in 1:2) {
@@ -100,8 +99,6 @@ model {
   }
  
   for(l in 1:L) {
-    //store unbiased split Y2 as row_vector array
-    Y2_ds_a[,l] = to_array_1d(Y2_ds[,l]);
     //nu priors
     nu[,l] ~ normal(0.5, 1);
   }
@@ -116,5 +113,5 @@ model {
   
   //likelihood
    Y1 ~ multi_normal_cholesky(nu, L_Sigma[1]);
-   Y2_ds_a ~ multi_normal_cholesky(nu, L_Sigma[2]);
+   Y2_ds ~ multi_normal_cholesky(nu, L_Sigma[2]);
 }
