@@ -10,7 +10,7 @@ functions {
     ls_1 = 0;
     gr_1 = 0;
     
-    for(l in 1:5) {  //replace with step functions?
+    for(l in 1:5) {  
       if(eta[l] < 0) {
         eta[l] = 0;
       }
@@ -112,7 +112,6 @@ model {
   for(j in 1:2) {
     L_Sigma[j] = diag_pre_multiply(L_sigma[j], L_Omega[j]);
     L_Omega[j] ~ lkj_corr_cholesky(4);
-    L_sigma_unif[j] ~ uniform(0, pi()/2);
   }
  
   //nu priors
