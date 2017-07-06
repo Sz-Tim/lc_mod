@@ -159,7 +159,7 @@ gg.nu %>% group_by(LC) %>%
 
 # Bias correction & pr(WP|Evg)
 ```{r veg_SB1_6}
-time.df <- tibble(n=c(25, 100, 500))#, 1000, 2000, 5000, 10000))
+time.df <- tibble(n=c(25, 100, 500, 1000, 2000))#, 5000, 10000))
 time.ls <- vector("list", length=4) 
 names(time.ls) <- c("repar_inline", "cauch_inline",
                     "repar_sep", "cauch_sep")
@@ -171,7 +171,7 @@ for(r in 1:nrow(time.df)) {
   
 
 sim.time <- system.time({
-set.seed(874)
+set.seed(800)
 ## global parameters
 nCell <- time.df$n[r]
 nLC <- 6
@@ -180,8 +180,8 @@ nLC <- 6
 nu <- GRNT[sample(1:nrow(GRNT), nCell),]
 
 ## covariance matrices
-cov.grnt <- cov(GRNT)/10
-cov.nlcd <- cov(GRNT)/10
+cov.grnt <- cov(GRNT)/15
+cov.nlcd <- cov(GRNT)/15
 
 ## simulate bias in NLCD
 ### initialize objects
@@ -229,22 +229,22 @@ d_SB1 <- list(N=nrow(nu), L=ncol(nu), Y1=Y1, Y2=Y2, nB_d=nB.d, nB_p=nB.p,
               X_d4=X.d[[4]], X_d5=X.d[[5]], X_p=X.p, mu=0, tau=2.5)
 mod.time.1 <- system.time({
 out <- stan(file="mod_sandbox/veg_SB1_6-3_repar_inline.stan", 
-            data=d_SB1, thin=50, init=0, chains=2, seed=874)#,
+            data=d_SB1, thin=50, init=0, chains=8, seed=874)#,
             # control=list(adapt_delta=0.95, max_treedepth=15))
 })
 mod.time.2 <- system.time({
-out2 <- stan(file="mod_sandbox/veg_SB1_6-3_cauch_inline.stan", 
-             data=d_SB1, thin=50, init=0, chains=2, seed=874)#, 
+out2 <- stan(file="mod_sandbox/veg_SB1_6-3_cauch_inline.stan",
+             data=d_SB1, thin=50, init=0, chains=8, seed=874)#,
             # control=list(adapt_delta=0.95, max_treedepth=15))
 })
 mod.time.3 <- system.time({
 out3 <- stan(file="mod_sandbox/veg_SB1_6-3_repar_sep.stan", 
-             data=d_SB1, thin=50, init=0, chains=2, seed=874)#, 
+             data=d_SB1, thin=50, init=0, chains=8, seed=874)#, 
             # control=list(adapt_delta=0.95, max_treedepth=15))
 })
 mod.time.4 <- system.time({
 out4 <- stan(file="mod_sandbox/veg_SB1_6-3_cauch_sep.stan", 
-             data=d_SB1, thin=50, init=0, chains=2, seed=874)#, 
+             data=d_SB1, thin=50, init=0, chains=8, seed=874)#, 
             # control=list(adapt_delta=0.95, max_treedepth=15))
 })
 time.ls[[r]][[1]] <- get_elapsed_time(out)
