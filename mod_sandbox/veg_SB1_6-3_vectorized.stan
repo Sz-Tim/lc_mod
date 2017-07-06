@@ -10,7 +10,7 @@ functions {
     ls_1 = 0;
     gr_1 = 0;
     
-    for(l in 1:5) {
+    for(l in 1:5) {  //replace with step functions?
       if(eta[l] < 0) {
         eta[l] = 0;
       }
@@ -36,37 +36,55 @@ functions {
 }
 
 data {
+  //counts and indices
   int N;  //number of grid cells
   int L;  //number of land cover classes
   int nB_d[L-1];  //number of bias covariates for each LC
   int nB_p;  //number of covariates for pr(WP|Evg)
+  //landcover: observed
   row_vector[L] Y1[N];  //GRANIT proportions
   matrix[N,L-1] Y2;  //NLCD proportions
+  //covariates
   matrix[N,nB_p] X_p;  //pr(WP|Evg) covariates
   matrix[N,nB_d[1]] X_d1;  //bias covariates: Dev
   matrix[N,nB_d[2]] X_d2;  //bias covariates: Oth
-  // matrix[N,nB_d[3]] X_d3;  //bias covariates: Hwd
   matrix[N,nB_d[4]] X_d4;  //bias covariates: Evg
-  // matrix[N,nB_d[5]] X_d5;  //bias covariates: Mxd
+  //reparameterized covariance
+  real mu;
+  real tau;
 }
 
 parameters {
+  //covariance
   cholesky_factor_corr[L] L_Omega[2]; //covariance matrix for Y1 & Y2
-  vector<lower=0>[L] L_sigma[2];  //covariance matrix for Y1 & Y2
+  // vector<lower=0>[L] L_sigma[2];  //covariance matrix for Y1 & Y2
+  vector<lower=0, upper=pi()/2>[L] L_sigma_unif[2];  //covariance
+  //landcover: latent non-constrained
   row_vector[L] nu[N];  //latent LC proportions
+  //betas
   vector[nB_p] beta_p;  //pr(WP|Evg) betas
   vector[nB_d[1]] beta_d1;  //bias betas: Dev
   vector[nB_d[2]] beta_d2;  //bias betas: Oth
-  // vector[nB_d[3]] beta_d3;  //bias betas: Hwd
   vector[nB_d[4]] beta_d4;  //bias betas: Evg
-  // vector[nB_d[5]] beta_d5;  //bias betas: Mxd
 }
 
 transformed parameters {
+////////// definitions //////////
+  //covariance
+  vector<lower=0>[L] L_sigma[2];  //covariance matrix for Y1 & Y2
+  //NLCD de-biasing and splitting
+  vector[N] d_Evg;  //bias between NLCD and nu
   vector<lower=0, upper=1>[N] p;  //pr(WP|Evg)
   row_vector[L] Y2_ds[N];  //unbiased, split NLCD
-  vector[N] d_Evg;  //bias between NLCD and nu
+  //landcover: latent compositional
   simplex[L] n_eta[N];  //gjam transformed nu
+  
+  
+////////// operations //////////
+  // L_sigma ~ cauchy(0, 2.5) --- reparameterized for speed
+  for(j in 1:2) {
+    L_sigma[j] = mu + tau * tan(L_sigma_unif[j]);
+  }
   
   //pr(WP|Evg)
   p = inv_logit(X_p * beta_p);
@@ -95,11 +113,12 @@ model {
   for(j in 1:2) {
     L_Sigma[j] = diag_pre_multiply(L_sigma[j], L_Omega[j]);
     L_Omega[j] ~ lkj_corr_cholesky(4);
-    L_sigma[j] ~ cauchy(0, 2.5);
+    // L_sigma[j] ~ cauchy(0, 2.5);
+    L_sigma_unif[j] ~ uniform(0, pi()/2);
   }
  
+  //nu priors
   for(l in 1:L) {
-    //nu priors
     nu[,l] ~ normal(0.5, 1);
   }
   
@@ -107,9 +126,7 @@ model {
   beta_p ~ normal(0, 1);
   to_vector(beta_d1) ~ normal(0, 1);
   to_vector(beta_d2) ~ normal(0, 1);
-  // to_vector(beta_d3) ~ normal(0, 1);
   to_vector(beta_d4) ~ normal(0, 1);
-  // to_vector(beta_d5) ~ normal(0, 1);
   
   //likelihood
    Y1 ~ multi_normal_cholesky(nu, L_Sigma[1]);
