@@ -160,12 +160,16 @@ gg.nu %>% group_by(LC) %>%
 # Bias correction & pr(WP|Evg)
 ```{r veg_SB1_6}
 time.df <- tibble(n=c(25, 50, 100, 500, 1000, 2000),
-                  m1=NA, m2=NA)
+                  m1=NA, m2=NA, m3=NA)
 
 # simulate data
+for(r in 1:nrow(time.df)) {
+  
+
 sim.time <- system.time({
+set.seed(1337)
 ## global parameters
-nCell <- time.df$n[2]
+nCell <- time.df$n[r]
 nLC <- 6
 
 ## latent LC proportions
@@ -221,15 +225,22 @@ d_SB1 <- list(N=nrow(nu), L=ncol(nu), Y1=Y1, Y2=Y2, nB_d=nB.d, nB_p=nB.p,
               X_d4=X.d[[4]], X_d5=X.d[[5]], X_p=X.p)
 mod.time.1 <- system.time({
 out <- stan(file="mod_sandbox/veg_SB1_6-3.stan", data=d_SB1, thin=50, init=0,
-            chains=3, control=list(adapt_delta=0.95, max_treedepth=15), seed=1337)
+            chains=3, seed=1338)#, control=list(adapt_delta=0.95, max_treedepth=15))
 })
 mod.time.2 <- system.time({
-out2 <- stan(file="mod_sandbox/veg_SB1_6-3_noSamples.stan", data=d_SB1, thin=50, init=0,
-            chains=3, control=list(adapt_delta=0.95, max_treedepth=15), seed=1337)
+out2 <- stan(file="mod_sandbox/veg_SB1_6-3_vectorized.stan", data=d_SB1, thin=50, init=0,
+            chains=3, seed=1338)#, control=list(adapt_delta=0.95, max_treedepth=15))
 })
-time.df$m1[time.df$n==nCell] <- mod.time.1[3]
-time.df$m2[time.df$n==nCell] <- mod.time.2[3]
-
+mod.time.3 <- system.time({
+out3 <- stan(file="mod_sandbox/veg_SB1_6-3_vectorized_2.stan", data=d_SB1, thin=50, init=0,
+            chains=3, seed=1338)#, control=list(adapt_delta=0.95, max_treedepth=15))
+})
+time.df$m1[r] <- mod.time.1[3]
+time.df$m2[r] <- mod.time.2[3]
+time.df$m3[r] <- mod.time.3[3]
+cat("Finished row", r, "with", nCell, "cells", "\n\tmod1:", mod.time.1[3], 
+    "\n\tmod2:", mod.time.2[3], "\n\tmod3:", mod.time.3[3], "\n")
+}
 # visualize
 ## nu
 gg.nu <- ggs(out, "n_eta") %>% arrange(Parameter, Chain, Iteration)
