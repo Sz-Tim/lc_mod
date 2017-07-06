@@ -243,6 +243,11 @@ time.ls[[r]] <- get_elapsed_time(out2)
 # time.df$m3[r] <- mod.time.3[3]
 cat("Finished row", r, "with", nCell, "cells: ", mod.time.2[3], "\n")
 }
+
+map(time.ls, as_tibble) %>% map_df(`[`, .id="n") %>% 
+  mutate(tot=(warmup + sample), perCell=tot/as.numeric(n)) %>%
+  ggplot(aes(x=as.numeric(n), y=perCell)) + geom_point()
+
 # visualize
 ## nu
 gg.nu <- ggs(out, "n_eta") %>% arrange(Parameter, Chain, Iteration)
