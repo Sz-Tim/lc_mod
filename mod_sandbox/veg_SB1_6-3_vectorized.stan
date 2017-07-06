@@ -64,33 +64,23 @@ parameters {
 
 transformed parameters {
   vector<lower=0, upper=1>[N] p;  //pr(WP|Evg)
-  matrix[N,L-1] Y2_d;
   matrix[N,L] Y2_ds;
-  matrix<lower=-1, upper=1>[N,L-1] d; //bias between NLCD and nu
+  vector[N] d_Evg; //bias between NLCD and nu
   simplex[L] n_eta[N];
   
   //pr(WP|Evg)
   p = inv_logit(X_p * beta_p);
   
-  //estimate bias
-  d[,1] = X_d1 * beta_d1;
-  d[,2] = X_d2 * beta_d2;
-  // d[,3] = X_d3 * beta_d3;
-  d[,4] = X_d4 * beta_d4;
-  // d[,5] = X_d5 * beta_d5;
+  //store bias in Evg
+  d_Evg = X_d4 * beta_d4;
   
-  //bias terms set to 0
-  d[,3] = to_vector(rep_array(0, N));
-  d[,5] = to_vector(rep_array(0, N));
-  
-  //de-bias NLCD proportions
-  Y2_d = Y2 + d;
-  
-  //split WP to [,4] and Evg to [,5]
-  Y2_ds[,1:3] = Y2_d[,1:3];
-  Y2_ds[,4] = Y2_d[,4] .* p;
-  Y2_ds[,5] = Y2_d[,4] .* (1-p);
-  Y2_ds[,6] = Y2_d[,5];
+  //add bias & split WP to [,4] and Evg to [,5]
+  Y2_ds[,1] = Y2[,1] + (X_d1 * beta_d1);
+  Y2_ds[,2] = Y2[,1] + (X_d2 * beta_d2);
+  Y2_ds[,3] = Y2[,1];
+  Y2_ds[,4] = (Y2[,4] + d_Evg) .* p;
+  Y2_ds[,5] = (Y2[,4] + d_Evg) .* (1-p);
+  Y2_ds[,6] = Y2[,5];
   
   //nu to eta
   for(n in 1:N) {
