@@ -57,7 +57,6 @@ data {
 parameters {
   //covariance
   cholesky_factor_corr[L] L_Omega[2]; //covariance matrix for Y1 & Y2
-  // vector<lower=0>[L] L_sigma[2];  //covariance matrix for Y1 & Y2
   vector<lower=0, upper=pi()/2>[L] L_sigma_unif[2];  //covariance
   //landcover: latent non-constrained
   row_vector[L] nu[N];  //latent LC proportions
@@ -113,7 +112,6 @@ model {
   for(j in 1:2) {
     L_Sigma[j] = diag_pre_multiply(L_sigma[j], L_Omega[j]);
     L_Omega[j] ~ lkj_corr_cholesky(4);
-    // L_sigma[j] ~ cauchy(0, 2.5);
     L_sigma_unif[j] ~ uniform(0, pi()/2);
   }
  
