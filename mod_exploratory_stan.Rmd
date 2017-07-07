@@ -171,7 +171,7 @@ for(r in 1:nrow(time.df)) {
   
 
 sim.time <- system.time({
-set.seed(874)
+set.seed(800)
 ## global parameters
 nCell <- time.df$n[r]
 nLC <- 6
@@ -180,8 +180,8 @@ nLC <- 6
 nu <- GRNT[sample(1:nrow(GRNT), nCell),]
 
 ## covariance matrices
-cov.grnt <- cov(GRNT)/10
-cov.nlcd <- cov(GRNT)/10
+cov.grnt <- cov(GRNT)
+cov.nlcd <- cov(GRNT)
 
 ## simulate bias in NLCD
 ### initialize objects

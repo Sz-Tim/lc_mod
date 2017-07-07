@@ -101,7 +101,6 @@ model {
   for(j in 1:2) {
     L_Sigma[j] = diag_pre_multiply(L_sigma[j], L_Omega[j]);
     L_Omega[j] ~ lkj_corr_cholesky(4);
-    L_sigma_unif[j] ~ uniform(0, pi()/2);
   }
  
   for(l in 1:L) {
