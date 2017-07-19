@@ -6,7 +6,7 @@ functions {
     real ls_1;
     int gr_1;
     
-    eta = w;
+    eta[1:5] = w;
     ls_1 = 0;
     gr_1 = 0;
     
@@ -42,21 +42,28 @@ data {
   int nB_d[L-1];  //number of bias covariates for each LC
   int nB_p;  //number of covariates for pr(WP|Evg)
   //landcover: observed
-  row_vector<lower=0, upper=1>[L] Y1[N];  //GRANIT proportions
-  matrix<lower=0, upper=1>[N,L-1] Y2;  //NLCD proportions
+  row_vector<lower=0, upper=1>[L-1] Y1[N];  //GRANIT proportions
+  matrix<lower=0, upper=1>[N,L-2] Y2;  //NLCD proportions
   //covariates
   matrix[N,nB_p] X_p;  //pr(WP|Evg) covariates
   matrix[N,nB_d[1]] X_d1;  //bias covariates: Dev
   matrix[N,nB_d[2]] X_d2;  //bias covariates: Oth
   matrix[N,nB_d[4]] X_d4;  //bias covariates: Evg
+  // inputs for prediction
+  int N_new;  //number of cells to predict with novel NLCD data
+  matrix<lower=0, upper=1>[N_new,L-2] Y2_new;  //novel NLCD proportions
+  matrix[N_new,nB_p] X_p_new;  //pr(WP|Evg) covariates
+  matrix[N_new,nB_d[1]] X_d1_new;  //novel bias covariates: Dev
+  matrix[N_new,nB_d[2]] X_d2_new;  //novel bias covariates: Oth
+  matrix[N_new,nB_d[4]] X_d4_new;  //novel bias covariates: Evg
 }
 
 parameters {
   //covariance
-  cholesky_factor_corr[L] L_Omega[2]; //covariance matrix for Y1 & Y2
-  vector<lower=0, upper=pi()/2>[L] L_sigma_unif[2];  //covariance
+  cholesky_factor_corr[L-1] L_Omega[2]; //covariance matrix for Y1 & Y2
+  vector<lower=0, upper=pi()/2>[L-1] L_sigma_unif[2];  //covariance
   //landcover: latent non-constrained
-  row_vector[L] nu[N];  //latent LC proportions
+  row_vector<lower=-1, upper=2>[L-1] nu[N];  //latent LC proportions
   //betas
   vector[nB_p] beta_p;  //pr(WP|Evg) betas
   vector[nB_d[1]] beta_d1;  //bias betas: Dev
@@ -66,11 +73,12 @@ parameters {
 
 transformed parameters {
   //covariance
-  vector<lower=0>[L] L_sigma[2];  //covariance matrix for Y1 & Y2
+  vector<lower=0>[L-1] L_sigma[2];  //covariance matrix for Y1 & Y2
+  matrix[L-1,L-1] L_Sigma[2];
   //NLCD de-biasing and splitting
   vector[N] d_Evg;  //bias between NLCD and nu
   vector<lower=0, upper=1>[N] p;  //pr(WP|Evg)
-  row_vector[L] Y2_ds[N];  //unbiased, split NLCD
+  row_vector[L-1] Y2_ds[N];  //unbiased, split NLCD
   //landcover: latent compositional
   simplex[L] n_eta[N];  //gjam transformed nu
   
@@ -78,6 +86,7 @@ transformed parameters {
   // L_sigma ~ cauchy(0, 2.5) --- reparameterized for speed
   for(j in 1:2) {
     L_sigma[j] = 2.5 * tan(L_sigma_unif[j]);
+    L_Sigma[j] = diag_pre_multiply(L_sigma[j], L_Omega[j]);
   }
   
   //pr(WP|Evg)
@@ -88,11 +97,10 @@ transformed parameters {
   
   //add bias & split WP to [,4] and Evg to [,5]
   Y2_ds[,1] = to_array_1d(Y2[,1] + (X_d1 * beta_d1));
-  Y2_ds[,2] = to_array_1d(Y2[,1] + (X_d2 * beta_d2));
-  Y2_ds[,3] = to_array_1d(Y2[,1]);
+  Y2_ds[,2] = to_array_1d(Y2[,2] + (X_d2 * beta_d2));
+  Y2_ds[,3] = to_array_1d(Y2[,3]);
   Y2_ds[,4] = to_array_1d((Y2[,4] + d_Evg) .* p);
   Y2_ds[,5] = to_array_1d((Y2[,4] + d_Evg) .* (1-p));
-  Y2_ds[,6] = to_array_1d(Y2[,5]);
   
   //nu to eta
   for(n in 1:N) {
@@ -101,26 +109,46 @@ transformed parameters {
 }
 
 model {
-  matrix[L,L] L_Sigma[2];
   
   //covariance priors
   for(j in 1:2) {
-    L_Sigma[j] = diag_pre_multiply(L_sigma[j], L_Omega[j]);
-    L_Omega[j] ~ lkj_corr_cholesky(4);
+    L_Omega[j] ~ lkj_corr_cholesky(10);
   }
  
   //nu priors
-  for(l in 1:L) {
-    nu[,l] ~ normal(0.5, 1);
+  for(l in 1:(L-1)) {
+    nu[,l] ~ uniform(-1, 2);
   }
   
   //beta priors
   beta_p ~ normal(0, 1);
-  to_vector(beta_d1) ~ normal(0, 1);
-  to_vector(beta_d2) ~ normal(0, 1);
-  to_vector(beta_d4) ~ normal(0, 1);
+  beta_d1 ~ normal(0, 1);
+  beta_d2 ~ normal(0, 1);
+  beta_d4 ~ normal(0, 1);
   
   //likelihood
    Y1 ~ multi_normal_cholesky(nu, L_Sigma[1]);
    Y2_ds ~ multi_normal_cholesky(nu, L_Sigma[2]);
+}
+
+generated quantities {
+  vector[N_new] d_Evg_new;  //bias between NLCD and nu
+  vector<lower=0, upper=1>[N_new] p_new;  //pr(WP|Evg)
+  row_vector[L-1] Y2_ds_new[N_new];  //unbiased, split NLCD
+  row_vector[L-1] nu_new[N_new];
+  simplex[L] n_eta_new[N_new];  //gjam transformed nu
+  
+  p_new = inv_logit(X_p_new * beta_p);
+  d_Evg_new = X_d4_new * beta_d4;
+  
+  Y2_ds_new[,1] = to_array_1d(Y2_new[,1] + (X_d1_new * beta_d1));
+  Y2_ds_new[,2] = to_array_1d(Y2_new[,2] + (X_d2_new * beta_d2));
+  Y2_ds_new[,3] = to_array_1d(Y2_new[,3]);
+  Y2_ds_new[,4] = to_array_1d((Y2_new[,4] + d_Evg_new) .* p_new);
+  Y2_ds_new[,5] = to_array_1d((Y2_new[,4] + d_Evg_new) .* (1-p_new));
+  
+  for(n in 1:N_new) {
+    nu_new[n] = multi_normal_cholesky_rng(Y2_ds_new[n]', L_Sigma[2])';
+    n_eta_new[n] = tr_gjam_inv(nu_new[n])';
+  }
 }

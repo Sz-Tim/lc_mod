@@ -159,19 +159,17 @@ gg.nu %>% group_by(LC) %>%
 
 # Bias correction & pr(WP|Evg)
 ```{r veg_SB1_6}
-time.df <- tibble(n=c(500))#, 1000, 1000, 2000, 5000, 10000))
+time.df <- tibble(n=c(10, 500, 1000, 3000, 7500))
 time.ls <- vector("list", length=3) 
-names(time.ls) <- c("cauch0_Lmx0", "cauch0_Lmx1",
-                    "cauch1_Lmx0")
+names(time.ls) <- c("evg0_p0", "evg0_p1", "evg1_p0")
 time.ls <- time.ls %>% list() %>% rep(nrow(time.df))
 names(time.ls) <- time.df$n
 
 # simulate data
 for(r in 1:nrow(time.df)) {
   
-
 sim.time <- system.time({
-set.seed(52253)
+set.seed(4337)
 ## global parameters
 nCell <- time.df$n[r]
 nLC <- 6
@@ -215,7 +213,6 @@ for(i in 1:nCell) {
   Y2.ds[i,] <- rmvnorm(1, nu[i,], cov.nlcd)
 }
 ### NLCD: combine WP + Evg
-Y2.d <- cbind(Y2.ds[,1:4], Y2.ds[,5] + Y2.ds[,6])
 Y2.d <- cbind(Y2.ds[,1:3], Y2.ds[,4] + Y2.ds[,5], Y2.ds[,6])
 ### NLCD: add bias
 Y2 <- ((Y2.d - d) + c(0,0,0,0,0.001)) %>% apply(., 1, tr_gjam_inv) %>% t
@@ -224,27 +221,70 @@ plot(nu, Y1)
 plot(cbind(nu[,1:3], nu[,4]+nu[,5], nu[,6]), Y2)
 })
 # run model
-d_SB1 <- list(N=nrow(nu), L=ncol(nu), Y1=Y1, Y2=Y2, nB_d=nB.d, nB_p=nB.p,
+d_SB1 <- list(N=nrow(nu), L=ncol(nu), Y1=Y1[,-6], Y2=Y2[,-5], 
+              nB_d=nB.d, nB_p=nB.p,
               X_d1=X.d[[1]], X_d2=X.d[[2]], X_d3=X.d[[3]], 
               X_d4=X.d[[4]], X_d5=X.d[[5]], X_p=X.p)
+
+
 mod.time.1 <- system.time({
-out <- stan(file="mod_sandbox/6-3_cauch0_Lmx0.stan",
-            data=d_SB1, thin=50, init=0, chains=2, seed=334561)#,
+out <- stan(file="mod_sandbox/6-3_evg0_p0.stan",
+            data=d_SB1, thin=50, init=0, chains=8, seed=4337)#,
             # control=list(adapt_delta=0.95, max_treedepth=15))
 })
+gg.nu <- ggs(out, "n_eta") %>% arrange(Parameter, Chain, Iteration)
+nGG <- attr(gg.nu, "nChains")*attr(gg.nu, "nIterations")
+gg.nu %<>% 
+  mutate(nu.true = t(nu) %>% c %>% rep(each=nGG),
+         Y1 = t(Y1) %>% c %>% rep(each=nGG),
+         Y2 = t(cbind(Y2[,1:3], Y2[,4]*antilogit(X.p %*% B.p),
+                      Y2[,4]*(1-antilogit(X.p %*% B.p)), Y2[,5])) %>%
+           c %>% rep(each=nGG),
+         LC = 1:6 %>% rep(each=nGG) %>% rep(times=nCell),
+         Cell = 1:nCell %>% rep(each=nGG*6)) %>% 
+  write_csv(paste0("output/", names(time.ls[[1]])[1], 
+                   "_", names(time.ls)[r], "cells.csv"))
+
+
 mod.time.2 <- system.time({
-out2 <- stan(file="mod_sandbox/6-3_cauch0_Lmx1.stan",
-             data=d_SB1, thin=50, init=0, chains=2, seed=334561)#,
+out2 <- stan(file="mod_sandbox/6-3_evg0_p1.stan",
+             data=d_SB1, thin=50, init=0, chains=8, seed=4337)#,
             # control=list(adapt_delta=0.95, max_treedepth=15))
 })
+gg.nu2 <- ggs(out2, "n_eta") %>% arrange(Parameter, Chain, Iteration)
+nGG <- attr(gg.nu2, "nChains")*attr(gg.nu2, "nIterations")
+gg.nu2 %<>% 
+  mutate(nu.true = t(nu) %>% c %>% rep(each=nGG),
+         Y1 = t(Y1) %>% c %>% rep(each=nGG),
+         Y2 = t(cbind(Y2[,1:3], Y2[,4]*antilogit(X.p %*% B.p),
+                      Y2[,4]*(1-antilogit(X.p %*% B.p)), Y2[,5])) %>%
+           c %>% rep(each=nGG),
+         LC = 1:6 %>% rep(each=nGG) %>% rep(times=nCell),
+         Cell = 1:nCell %>% rep(each=nGG*6)) %>% 
+  write_csv(paste0("output/", names(time.ls[[1]])[2], 
+                   "_", names(time.ls)[r], "cells.csv"))
+
+
 mod.time.3 <- system.time({
-out3 <- stan(file="mod_sandbox/6-3_cauch1_Lmx0.stan",
-             data=d_SB1, thin=50, init=0, chains=2, seed=334561)#,
+out3 <- stan(file="mod_sandbox/6-3_evg1_p0.stan",
+             data=d_SB1, thin=50, init=0, chains=8, seed=4337)#,
             # control=list(adapt_delta=0.95, max_treedepth=15))
 })
+gg.nu3 <- ggs(out3, "n_eta") %>% arrange(Parameter, Chain, Iteration)
+nGG <- attr(gg.nu3, "nChains")*attr(gg.nu3, "nIterations")
+gg.nu3 %<>% 
+  mutate(nu.true = t(nu) %>% c %>% rep(each=nGG),
+         Y1 = t(Y1) %>% c %>% rep(each=nGG),
+         Y2 = t(cbind(Y2[,1:3], Y2[,4]*antilogit(X.p %*% B.p),
+                      Y2[,4]*(1-antilogit(X.p %*% B.p)), Y2[,5])) %>%
+           c %>% rep(each=nGG),
+         LC = 1:6 %>% rep(each=nGG) %>% rep(times=nCell),
+         Cell = 1:nCell %>% rep(each=nGG*6)) %>% 
+  write_csv(paste0("output/", names(time.ls[[1]])[3], 
+                   "_", names(time.ls)[r], "cells.csv"))
 # mod.time.4 <- system.time({
 # out4 <- stan(file="mod_sandbox/veg_SB1_6-3_Lmx_noEvg.stan",
-#              data=d_SB1, thin=50, init=0, chains=4, seed=31)#,
+#              data=d_SB1, thin=50, init=0, chains=4, seed=4337)#,
 #             # control=list(adapt_delta=0.95, max_treedepth=15))
 # })
 time.ls[[r]][[1]] <- get_elapsed_time(out)
@@ -262,28 +302,24 @@ cat("Finished row ", r, " with ", nCell, " cells:",
 time.ls %>% at_depth(2, as_tibble) %>% 
   at_depth(1, map_df, `[`, .id="model") %>% 
   map_df(`[`, .id="n") %>% 
-  mutate(tot=(warmup + sample), perCell=tot/as.numeric(n)) %>%
+  mutate(tot=(warmup + sample), perCell=tot/as.numeric(n)) %T>%
+  write_csv("timing/cauch_Lmx.csv") %>%
   ggplot(aes(x=as.numeric(n), y=perCell, colour=model)) + 
-  stat_smooth(method="loess", se=FALSE) + 
-  geom_point() + scale_colour_brewer(type="qual", palette=2) + 
+  stat_smooth(method="loess", se=FALSE, span=2) + 
+  geom_jitter(height=0, width=50) + scale_colour_brewer(type="qual", palette=2) + 
   labs(x="Number of cells", "Total time per cell (s/2000 iterations)")
+
+time.ls %>% at_depth(2, as_tibble) %>% 
+  at_depth(1, map_df, `[`, .id="model") %>% 
+  map_df(`[`, .id="n") %>% 
+  mutate(tot=(warmup + sample), perCell=tot/as.numeric(n)) %>%
+  lm(perCell ~ model + as.numeric(n), data=.) %>% summary
 
 # visualize
 ## nu
-gg.nu <- ggs(out, "n_eta") %>% arrange(Parameter, Chain, Iteration)
-nGG <- attr(gg.nu, "nChains")*attr(gg.nu, "nIterations")
-gg.nu %<>% rename(value.1=value) %>%
-  mutate(nu.true = t(nu) %>% c %>% rep(each=nGG),
-         Y1 = t(Y1) %>% c %>% rep(each=nGG),
-         Y2 = t(cbind(Y2[,1:3], Y2[,4]*antilogit(X.p %*% B.p),
-                      Y2[,4]*(1-antilogit(X.p %*% B.p)), Y2[,5])) %>%
-           c %>% rep(each=nGG),
-         LC = 1:6 %>% rep(each=nGG) %>% rep(times=nCell),
-         Cell = 1:nCell %>% rep(each=nGG*6))
-gg.nu2 <- ggs(out2, "n_eta") %>% arrange(Parameter, Chain, Iteration)
+gg.nu %<>% rename(value.1=value)
 gg.nu$value.2 <- gg.nu2$value
-gg.nu3 <- ggs(out3, "n_eta") %>% arrange(Parameter, Chain, Iteration)
-gg.nu$value.3 <- gg.nu2$value
+gg.nu$value.3 <- gg.nu3$value
 # gg.nu4 <- ggs(out4, "n_eta") %>% arrange(Parameter, Chain, Iteration)
 # gg.nu$value.4 <- gg.nu2$value
 # ggplot(gg.nu, aes(x=nu.true, y=value.1)) + geom_abline(slope=1, linetype=2) +
@@ -321,21 +357,192 @@ Y1.rmse <- ((nu - Y1)^2) %>% colMeans %>% sqrt
 Y2.rmse <- ((nu - cbind(Y2[,1:3], Y2[,4]*antilogit(X.p %*% B.p),
                       Y2[,4]*(1-antilogit(X.p %*% B.p)), Y2[,5]))^2) %>% colMeans %>% sqrt
 gg.nu %>% group_by(LC) %>% 
-  mutate(sdev.1=(nu.true-value.1)^2, sdev.2=(nu.true-value.2)^2) %>%
+  mutate(sdev.1=(nu.true-value.1)^2, 
+         sdev.2=(nu.true-value.2)^2,
+         sdev.3=(nu.true-value.3)^2) %>%
   summarise(mod.1.rmse=mean(sdev.1) %>% sqrt %>% round(3),
-            mod.2.rmse=mean(sdev.2) %>% sqrt %>% round(3)) %>%
+            mod.2.rmse=mean(sdev.2) %>% sqrt %>% round(3),
+            mod.3.rmse=mean(sdev.3) %>% sqrt %>% round(3)) %>%
   mutate(Y1.rmse=round(Y1.rmse,3), Y2.rmse=round(Y2.rmse,3),
          d.1.Y1=round(mod.1.rmse-Y1.rmse, 3),  pD.1.Y1=round(d.1.Y1/Y1.rmse,3),
          d.1.Y2=round(mod.1.rmse-Y2.rmse, 3),  pD.1.Y2=round(d.1.Y2/Y2.rmse,3),
          d.2.Y1=round(mod.2.rmse-Y1.rmse, 3),  pD.2.Y1=round(d.2.Y1/Y1.rmse,3),
-         d.2.Y2=round(mod.2.rmse-Y2.rmse, 3),  pD.2.Y2=round(d.2.Y2/Y2.rmse,3)) %>%
-  select(LC, pD.1.Y1, pD.1.Y2, pD.2.Y1, pD.2.Y2)
+         d.2.Y2=round(mod.2.rmse-Y2.rmse, 3),  pD.2.Y2=round(d.2.Y2/Y2.rmse,3),
+         d.3.Y1=round(mod.3.rmse-Y1.rmse, 3),  pD.3.Y1=round(d.3.Y1/Y1.rmse,3),
+         d.3.Y2=round(mod.3.rmse-Y2.rmse, 3),  pD.3.Y2=round(d.3.Y2/Y2.rmse,3)) %>%
+  select(LC, pD.1.Y1, pD.2.Y1, pD.3.Y1, pD.1.Y2, pD.2.Y2, pD.3.Y2)
 ```
 
 
 
 
+```{r}
+cells <- sample(1:nrow(GRNT), nCell)
+p.nu <- GRNT[cells,4]/(GRNT[cells,4]+GRNT[cells,5]+0.0001)
+p.nu[p.nu==0] <- 0.0001; p.nu[p.nu==1] <- 0.9999
+X.p <- matrix(nrow=nCell, ncol=nB.p)
+X.p[,1] <- logit(p.nu)/B.p[1] - B.p[2] + rnorm(nCell, 0, 0.5)
+X.p[,2] <- 1
+
+d_SB1 <- list(N=nCell, L=6, 
+              Y1=GRNT[cells,-6], Y2=NLCD[cells,-5], 
+              nB_d=nB.d, nB_p=nB.p,
+              X_d1=X.d[[1]], X_d2=X.d[[2]], X_d3=X.d[[3]], 
+              X_d4=X.d[[4]], X_d5=X.d[[5]], X_p=X.p)
+out <- stan(file="mod_sandbox/6-3_cauch0_Lmx0.stan", iter=2000,
+            data=d_SB1, thin=50, init=0, chains=4, seed=33456)
+gg.nu <- ggs(out, "n_eta") %>% arrange(Parameter, Chain, Iteration)
+nGG <- attr(gg.nu, "nChains")*attr(gg.nu, "nIterations")
+gg.nu %<>% rename(value.1=value) %>%
+  mutate(Y1 = t(GRNT[cells,]) %>% c %>% rep(each=nGG),
+         Y2 = t(cbind(d_SB1$Y2[,1:3], d_SB1$Y2[,4]*antilogit(X.p %*% B.p),
+                      d_SB1$Y2[,4]*(1-antilogit(X.p %*% B.p)), 
+                      NLCD[cells,5])) %>%
+           c %>% rep(each=nGG),
+         LC = 1:6 %>% rep(each=nGG) %>% rep(times=nCell),
+         Cell = 1:nCell %>% rep(each=nGG*6))
+gg.med <- gg.nu %>% group_by(Cell, LC, Parameter) %>%
+  summarise(med.1=median(value.1), Y1=first(Y1), Y2=first(Y2)) %>%
+  ungroup() %>% group_by(Cell)
+ggplot(gg.med, aes(x=Y1, y=med.1)) +  geom_abline(slope=1, linetype=2) +
+  geom_point(alpha=0.5) + facet_wrap(~LC) + ylim(0,1)
+ggplot(gg.med, aes(x=Y2, y=med.1)) +  geom_abline(slope=1, linetype=2) +
+  geom_point(alpha=0.5) + facet_wrap(~LC) + ylim(0,1)
+ggplot(gg.med, aes(x=Y1, y=Y2)) +  geom_abline(slope=1, linetype=2) +
+  geom_point(alpha=0.5) + facet_wrap(~LC) + ylim(0,1)
+ggplot(gg.med, aes(x=(Y1+Y2)/2, y=med.1)) +  geom_abline(slope=1, linetype=2) +
+  geom_point(alpha=0.5) + facet_wrap(~LC) + ylim(0,1)
+
+ggplot(gg.nu, aes(x=value.1)) + geom_histogram() + facet_wrap(~LC)
+ggplot(gg.nu, aes(x=Y1)) + geom_histogram() + facet_wrap(~LC)
+ggplot(gg.nu, aes(x=(Y1+Y2)/2)) + geom_histogram() + facet_wrap(~LC)
+
+ggplot(gg.nu, aes(x=Y1, y=value.1, colour=factor(Chain))) +  geom_abline(slope=1, linetype=2) +
+  geom_point(alpha=0.05) + facet_wrap(~LC) + ylim(0,1)
+ggplot(gg.nu, aes(x=Y2, y=value.1)) +  geom_abline(slope=1, linetype=2) +
+  geom_point(alpha=0.05) + facet_wrap(~LC) + ylim(0,1)
+ggplot(gg.nu, aes(x=(Y1+Y2)/2, y=value.1)) +  geom_abline(slope=1, linetype=2) +
+  geom_point(alpha=0.05) + facet_wrap(~LC) + ylim(0,1)
+
+```
 
 
 
+```{r pred_test}
+nCell <- 500
+nNew <- 500
+nLC <- 6
+
+## latent LC proportions
+nu <- GRNT[sample(1:nrow(GRNT), nCell),]
+nuNew <- GRNT[sample(1:nrow(GRNT), nNew),]
+
+## covariance matrices
+cov.grnt <- cov(GRNT)/10
+cov.nlcd <- cov(GRNT)/10
+
+## simulate bias in NLCD
+### initialize objects
+nB.d <- c(2, 2, 1, 1, 1)  # Dev, Oth, Hwd, Evg, Mxd
+B.Cov <- c(1, 1, 0, 1, 0)  # which deltas to model
+X.d <- vector("list", nLC-1)
+X.dNew <- X.d
+B.d <- X.d
+d <- matrix(nrow=nCell, ncol=nLC-1)
+dNew <- matrix(nrow=nNew, ncol=nLC-1)
+### generate betas & covariates, then calculate deltas
+for(i in 1:(nLC-1)) {
+  X.d[[i]] <- runif(nCell*(nB.d[i]), -2, 2) %>% matrix(nrow=nCell)*B.Cov[i]
+  X.dNew[[i]] <- runif(nNew*(nB.d[i]), -2, 2) %>% matrix(nrow=nNew)*B.Cov[i]
+  B.d[[i]] <- runif(nB.d[i], -1, 1) %>% matrix(nrow=nB.d[i])*B.Cov[i]
+  d[,i] <- X.d[[i]] %*% B.d[[i]]
+  dNew[,i] <- X.dNew[[i]] %*% B.d[[i]]
+}
+
+## proportion WP|Evg
+nB.p <- 2
+B.p <- c(1.2, 0.25)
+p.nu <- nu[,4]/(nu[,4]+nu[,5]+0.0001)
+p.nu[p.nu==0] <- 0.0001; p.nu[p.nu==1] <- 0.9999
+X.p <- matrix(nrow=nCell, ncol=nB.p)
+X.p[,1] <- logit(p.nu)/B.p[1] - B.p[2] + rnorm(nCell, 0, 0.5)
+X.p[,2] <- 1
+p.nuNew <- nuNew[,4]/(nuNew[,4]+nuNew[,5]+0.0001)
+p.nuNew[p.nuNew==0] <- 0.0001; p.nuNew[p.nuNew==1] <- 0.9999
+X.pNew <- matrix(nrow=nNew, ncol=nB.p)
+X.pNew[,1] <- logit(p.nuNew)/B.p[1] - B.p[2] + rnorm(nNew, 0, 0.5)
+X.pNew[,2] <- 1
+
+
+## generate Ys
+### GRNT, NLCD.unbiased.split
+Y1 <- nu; Y2.ds <- Y1
+for(i in 1:nCell) {
+  Y1[i,] <- (rmvnorm(1, nu[i,], cov.grnt) + c(0,0,0,0,0,0.001)) %>% tr_gjam_inv
+  Y2.ds[i,] <- rmvnorm(1, nu[i,], cov.nlcd)
+}
+Y2.dsNew <- nuNew
+for (i in 1:nNew) {
+  Y2.dsNew[i,] <- rmvnorm(1, nuNew[i,], cov.nlcd)
+}
+### NLCD: combine WP + Evg
+Y2.d <- cbind(Y2.ds[,1:3], Y2.ds[,4] + Y2.ds[,5], Y2.ds[,6])
+Y2.dNew <- cbind(Y2.dsNew[,1:3], Y2.dsNew[,4] + Y2.dsNew[,5], Y2.dsNew[,6])
+### NLCD: add bias
+Y2 <- ((Y2.d - d) + c(0,0,0,0,0.001)) %>% apply(., 1, tr_gjam_inv) %>% t
+Y2New <- ((Y2.dNew - dNew) + c(0,0,0,0,0.001)) %>% apply(., 1, tr_gjam_inv) %>% t
+
+d_SB1 <- list(N=nrow(nu), L=ncol(nu), Y1=Y1[,-6], Y2=Y2[,-5], 
+              nB_d=nB.d, nB_p=nB.p,
+              X_d1=X.d[[1]], X_d2=X.d[[2]], X_d3=X.d[[3]], 
+              X_d4=X.d[[4]], X_d5=X.d[[5]], X_p=X.p,
+              N_new=nNew, Y2_new=Y2New[,-5], 
+              X_d1_new=X.dNew[[1]], X_d2_new=X.dNew[[2]], X_d3_new=X.dNew[[3]], 
+              X_d4_new=X.dNew[[4]], X_d5_new=X.dNew[[5]], X_p_new=X.pNew)
+out <- stan(file="mod_sandbox/6-3_cauch0_Lmx0.stan", iter=2000,
+            data=d_SB1, thin=50, init=0, chains=4, seed=4337)
+gg.nu <- ggs(out, "n_eta") %>% 
+  filter(!grepl("_new", .$Parameter)) %>%
+  arrange(Parameter, Chain, Iteration)
+nGG <- attr(gg.nu, "nChains")*attr(gg.nu, "nIterations")
+gg.nu %<>% rename(value.1=value) %>%
+  mutate(nu = t(nu) %>% c %>% rep(each=nGG),
+         Y2 = t(cbind(Y2[,1:3], Y2[,4]*antilogit(X.p %*% B.p),
+                      Y2[,4]*(1-antilogit(X.p %*% B.p)), 
+                      Y2[,5])) %>%
+           c %>% rep(each=nGG),
+         LC = 1:6 %>% rep(each=nGG) %>% rep(times=nCell),
+         Cell = 1:nCell %>% rep(each=nGG*6)) %>%
+  group_by(Cell, LC, Parameter) %>%
+  summarise(med=median(value.1), nu=first(nu), Y2=first(Y2)) %>%
+  ungroup() %>% group_by(Cell)
+gg.new <- ggs(out, "Y2_ds_new") %>% arrange(Parameter, Chain, Iteration)
+nGG <- attr(gg.new, "nChains")*attr(gg.new, "nIterations")
+gg.new %<>% rename(value.1=value) %>%
+  mutate(nuNew = t(nuNew) %>% c %>% rep(each=nGG),
+         Y2New = t(cbind(Y2New[,1:3], Y2New[,4]*antilogit(X.pNew %*% B.p),
+                      Y2New[,4]*(1-antilogit(X.pNew %*% B.p))) %>%#, 
+                      # Y2New[,5])) %>%
+           c %>% rep(each=nGG),
+         LC = 1:5 %>% rep(each=nGG) %>% rep(times=nNew),
+         Cell = 1:nNew %>% rep(each=nGG*5)) %>%
+  group_by(Cell, LC, Parameter) %>%
+  summarise(medNew=median(value.1), nuNew=first(nuNew), Y2New=first(Y2New)) %>%
+  ungroup() %>% group_by(Cell)
+
+ggplot(gg.nu, aes(x=nu, y=med)) + geom_point(alpha=0.2) + 
+  geom_abline(slope=1, linetype=3) + facet_wrap(~LC)
+ggplot(gg.nu, aes(x=Y2, y=med)) + geom_point(alpha=0.2) + 
+  geom_abline(slope=1, linetype=3) + facet_wrap(~LC)
+ggplot(gg.nu, aes(x=nu, y=Y2)) + geom_point(alpha=0.2) + 
+  geom_abline(slope=1, linetype=3) + facet_wrap(~LC)
+
+ggplot(gg.new, aes(x=nuNew, y=medNew)) + geom_point(alpha=0.2) + 
+  geom_abline(slope=1, linetype=3) + facet_wrap(~LC)
+ggplot(gg.new, aes(x=Y2New, y=medNew)) + geom_point(alpha=0.2) + 
+  geom_abline(slope=1, linetype=3) + facet_wrap(~LC)
+ggplot(gg.new, aes(x=nuNew, y=Y2New)) + geom_point(alpha=0.2) + 
+  geom_abline(slope=1, linetype=3) + facet_wrap(~LC)
+
+```
 
