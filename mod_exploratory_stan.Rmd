@@ -160,8 +160,8 @@ gg.nu %>% group_by(LC) %>%
 # Bias correction & pr(WP|Evg)
 ```{r veg_SB1_6}
 time.df <- tibble(n=c(10, 500, 1000, 3000, 7500))
-time.ls <- vector("list", length=3) 
-names(time.ls) <- c("evg0_p0", "evg0_p1", "evg1_p0")
+time.ls <- vector("list", length=4) 
+names(time.ls) <- c("evg0_p0", "evg0_p1", "evg1_p0", "evg2_p2")
 time.ls <- time.ls %>% list() %>% rep(nrow(time.df))
 names(time.ls) <- time.df$n
 
@@ -229,8 +229,7 @@ d_SB1 <- list(N=nrow(nu), L=ncol(nu), Y1=Y1[,-6], Y2=Y2[,-5],
 
 mod.time.1 <- system.time({
 out <- stan(file="mod_sandbox/6-3_evg0_p0.stan",
-            data=d_SB1, thin=50, init=0, chains=8, seed=4337)#,
-            # control=list(adapt_delta=0.95, max_treedepth=15))
+            data=d_SB1, thin=50, init=0, chains=8, seed=4337)
 })
 gg.nu <- ggs(out, "n_eta") %>% arrange(Parameter, Chain, Iteration)
 nGG <- attr(gg.nu, "nChains")*attr(gg.nu, "nIterations")
@@ -248,8 +247,7 @@ gg.nu %<>%
 
 mod.time.2 <- system.time({
 out2 <- stan(file="mod_sandbox/6-3_evg0_p1.stan",
-             data=d_SB1, thin=50, init=0, chains=8, seed=4337)#,
-            # control=list(adapt_delta=0.95, max_treedepth=15))
+             data=d_SB1, thin=50, init=0, chains=8, seed=4337)
 })
 gg.nu2 <- ggs(out2, "n_eta") %>% arrange(Parameter, Chain, Iteration)
 nGG <- attr(gg.nu2, "nChains")*attr(gg.nu2, "nIterations")
@@ -267,8 +265,7 @@ gg.nu2 %<>%
 
 mod.time.3 <- system.time({
 out3 <- stan(file="mod_sandbox/6-3_evg1_p0.stan",
-             data=d_SB1, thin=50, init=0, chains=8, seed=4337)#,
-            # control=list(adapt_delta=0.95, max_treedepth=15))
+             data=d_SB1, thin=50, init=0, chains=8, seed=4337)
 })
 gg.nu3 <- ggs(out3, "n_eta") %>% arrange(Parameter, Chain, Iteration)
 nGG <- attr(gg.nu3, "nChains")*attr(gg.nu3, "nIterations")
@@ -282,20 +279,31 @@ gg.nu3 %<>%
          Cell = 1:nCell %>% rep(each=nGG*6)) %>% 
   write_csv(paste0("output/", names(time.ls[[1]])[3], 
                    "_", names(time.ls)[r], "cells.csv"))
-# mod.time.4 <- system.time({
-# out4 <- stan(file="mod_sandbox/veg_SB1_6-3_Lmx_noEvg.stan",
-#              data=d_SB1, thin=50, init=0, chains=4, seed=4337)#,
-#             # control=list(adapt_delta=0.95, max_treedepth=15))
-# })
+mod.time.4 <- system.time({
+out4 <- stan(file="mod_sandbox/6-3_evg2_p2.stan",
+             data=d_SB1, thin=50, init=0, chains=8, seed=4337)
+})
+gg.nu4 <- ggs(out4, "n_eta") %>% arrange(Parameter, Chain, Iteration)
+nGG <- attr(gg.nu4, "nChains")*attr(gg.nu4, "nIterations")
+gg.nu4 %<>% 
+  mutate(nu.true = t(nu) %>% c %>% rep(each=nGG),
+         Y1 = t(Y1) %>% c %>% rep(each=nGG),
+         Y2 = t(cbind(Y2[,1:3], Y2[,4]*antilogit(X.p %*% B.p),
+                      Y2[,4]*(1-antilogit(X.p %*% B.p)), Y2[,5])) %>%
+           c %>% rep(each=nGG),
+         LC = 1:6 %>% rep(each=nGG) %>% rep(times=nCell),
+         Cell = 1:nCell %>% rep(each=nGG*6)) %>% 
+  write_csv(paste0("output/", names(time.ls[[1]])[4], 
+                   "_", names(time.ls)[r], "cells.csv"))
 time.ls[[r]][[1]] <- get_elapsed_time(out)
 time.ls[[r]][[2]] <- get_elapsed_time(out2)
 time.ls[[r]][[3]] <- get_elapsed_time(out3)
-# time.ls[[r]][[4]] <- get_elapsed_time(out4)
+time.ls[[r]][[4]] <- get_elapsed_time(out4)
 cat("Finished row ", r, " with ", nCell, " cells:", 
     "\n\t", names(time.ls[[1]])[1], ": ", mod.time.1[3],
     "\n\t", names(time.ls[[1]])[2], ": ", mod.time.2[3],
     "\n\t", names(time.ls[[1]])[3], ": ", mod.time.3[3],
-    # "\n\t", names(time.ls[[1]])[4], ": ", mod.time.4[3],
+    "\n\t", names(time.ls[[1]])[4], ": ", mod.time.4[3],
     "\n", sep="")
 }
 
@@ -320,6 +328,7 @@ time.ls %>% at_depth(2, as_tibble) %>%
 gg.nu %<>% rename(value.1=value)
 gg.nu$value.2 <- gg.nu2$value
 gg.nu$value.3 <- gg.nu3$value
+gg.nu$value.4 <- gg.nu4$value
 # gg.nu4 <- ggs(out4, "n_eta") %>% arrange(Parameter, Chain, Iteration)
 # gg.nu$value.4 <- gg.nu2$value
 # ggplot(gg.nu, aes(x=nu.true, y=value.1)) + geom_abline(slope=1, linetype=2) +
@@ -334,7 +343,7 @@ gg.nu$value.3 <- gg.nu3$value
 ## nu medians
 gg.med <- gg.nu %>% group_by(Cell, LC, Parameter) %>%
   summarise(med.1=median(value.1), med.2=median(value.2), 
-            med.3=median(value.3),
+            med.3=median(value.3), med.4=median(value.4),
             nu.true=first(nu.true), Y1=first(Y1), Y2=first(Y2)) %>%
   ungroup() %>% group_by(Cell)
 ggplot(gg.med, aes(x=nu.true, y=med.1)) +  geom_abline(slope=1, linetype=2) +
@@ -342,6 +351,8 @@ ggplot(gg.med, aes(x=nu.true, y=med.1)) +  geom_abline(slope=1, linetype=2) +
 ggplot(gg.med, aes(x=nu.true, y=med.2)) +  geom_abline(slope=1, linetype=2) +
   geom_point(alpha=0.5) + facet_wrap(~LC) + ylim(0,1)
 ggplot(gg.med, aes(x=nu.true, y=med.3)) +  geom_abline(slope=1, linetype=2) +
+  geom_point(alpha=0.5) + facet_wrap(~LC) + ylim(0,1)
+ggplot(gg.med, aes(x=nu.true, y=med.4)) +  geom_abline(slope=1, linetype=2) +
   geom_point(alpha=0.5) + facet_wrap(~LC) + ylim(0,1)
 
 ## betas
