@@ -135,7 +135,7 @@ generated quantities {
   vector[N_new] d_Evg_new;  //bias between NLCD and nu
   vector<lower=0, upper=1>[N_new] p_new;  //pr(WP|Evg)
   row_vector[L-1] Y2_ds_new[N_new];  //unbiased, split NLCD
-  row_vector[L-1] nu_new[N_new];
+  // row_vector[L-1] nu_new[N_new];
   simplex[L] n_eta_new[N_new];  //gjam transformed nu
   
   p_new = inv_logit(X_p_new * beta_p);
@@ -148,7 +148,8 @@ generated quantities {
   Y2_ds_new[,5] = to_array_1d((Y2_new[,4] + d_Evg_new) .* (1-p_new));
   
   for(n in 1:N_new) {
-    nu_new[n] = multi_normal_cholesky_rng(Y2_ds_new[n]', L_Sigma[2])';
-    n_eta_new[n] = tr_gjam_inv(nu_new[n])';
+    // nu_new[n] = multi_normal_cholesky_rng(Y2_ds_new[n]', L_Sigma[2])';
+    // n_eta_new[n] = tr_gjam_inv(nu_new[n])';
+    n_eta_new[n] = tr_gjam_inv(Y2_ds_new[n])';
   }
 }
