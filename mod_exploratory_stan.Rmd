@@ -540,8 +540,8 @@ dev.df$hd90 <- house90$hdSc[match(rdLen$CellID, house90$CellID)]
 pairs(dev.df, lower.panel=panel.smooth, upper.panel=panel.cor)
 cor(dev.df, use="pairwise")
 
-nCell <- 300
-nNew <- 200
+nCell <- 540
+nNew <- 360
 totCell <- nCell + nNew
 allCell <- sample(1:nrow(grnt), totCell)
 fitCell <- allCell[1:nCell]
@@ -603,7 +603,7 @@ d_SB1 <- list(N_Y1=nCell, N_Y2=totCell, L=6,
               nB_d=nBd, nB_p=nBp,
               X_d1=Xd[[1]], X_d2=Xd[[2]], X_d3=Xd[[3]], 
               X_d4=Xd[[4]], X_d5=Xd[[5]], X_p=Xp)
-out <- stan(file="mod_sandbox/6-3_newCells_InMod.stan", iter=4000, 
+out <- stan(file="mod_sandbox/6-3_newCells_InMod.stan", iter=5000, 
             data=d_SB1, thin=50, init=0, chains=4, seed=4337)
 gg.nu <- ggs(out, "n_eta") %>% 
   # filter(!grepl("_new", .$Parameter)) %>%
@@ -653,6 +653,11 @@ gg.nu %>% ungroup %>% group_by(Set, LC) %>%
   summarise(rmse.mod=(med-Y1)^2 %>% mean %>% sqrt %>% round(3),
             rmse.Y2=(Y2-Y1)^2 %>% mean %>% sqrt %>% round(3),
             diff=rmse.mod-rmse.Y2)
+
+ggplot(gg.nu, aes(x=Y1, xend=Y1, y=Y2, yend=med, colour=abs(Y2-Y1)<abs(med-Y1))) + xlim(0,1) + ylim(0,1) +
+    geom_abline(slope=1, linetype=3) + scale_colour_manual(values=c("darkgreen", "red")) +
+    geom_segment(arrow=arrow(length=unit(0.1, "cm")), alpha=0.2) + facet_grid(Set~LC) +
+    labs(x="Y1", y="Y2 -> median", main="no betas") + theme(legend.position="none")
 
 
 ```
