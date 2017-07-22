@@ -70,7 +70,6 @@ transformed parameters {
   vector<lower=0>[L-1] L_sigma[2];  //covariance matrix for Y1 & Y2
   matrix[L-1,L-1] L_Sigma[2];
   //NLCD de-biasing and splitting
-  vector[N_Y2] d_Evg;  //bias between NLCD and nu
   row_vector[L-1] Y2_ds[N_Y2];  //unbiased, split NLCD
   //landcover: latent compositional
   simplex[L] n_eta[N_Y2];  //gjam transformed nu
@@ -81,17 +80,16 @@ transformed parameters {
     L_sigma[j] = 2.5 * tan(L_sigma_unif[j]);
     L_Sigma[j] = diag_pre_multiply(L_sigma[j], L_Omega[j]);
   }
-
   
-  //store bias in Evg
-  d_Evg = X_d4 * beta_d4;
   
   //add bias & split WP to [,4] and Evg to [,5]
   Y2_ds[,1] = to_array_1d(Y2[,1] + (X_d1 * beta_d1));
   Y2_ds[,2] = to_array_1d(Y2[,2] + (X_d2 * beta_d2));
   Y2_ds[,3] = to_array_1d(Y2[,3]);
-  Y2_ds[,4] = to_array_1d((Y2[,4] + d_Evg) .* inv_logit(X_p * beta_p));
-  Y2_ds[,5] = to_array_1d((Y2[,4] + d_Evg) .* (1-inv_logit(X_p * beta_p)));
+  Y2_ds[,4] = to_array_1d((Y2[,4] + (X_d4 * beta_d4)) 
+      .* inv_logit(X_p * beta_p));
+  Y2_ds[,5] = to_array_1d((Y2[,4] + (X_d4 * beta_d4)) 
+      .* (1-inv_logit(X_p * beta_p)));
   
   //nu to eta
   for(n in 1:(N_Y2)) {
@@ -103,7 +101,7 @@ model {
   
   //covariance priors
   for(j in 1:2) {
-    L_Omega[j] ~ lkj_corr_cholesky(10);
+    L_Omega[j] ~ lkj_corr_cholesky(5);
   }
  
   //nu priors
