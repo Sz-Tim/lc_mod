@@ -603,8 +603,8 @@ d_SB1 <- list(N_Y1=nCell, N_Y2=totCell, L=6,
               nB_d=nBd, nB_p=nBp,
               X_d1=Xd[[1]], X_d2=Xd[[2]], X_d3=Xd[[3]], 
               X_d4=Xd[[4]], X_d5=Xd[[5]], X_p=Xp)
-out <- stan(file="mod_sandbox/6-3_newCells_InMod.stan", iter=5000, 
-            data=d_SB1, thin=50, init=0, chains=4, seed=4337)
+out <- stan(file="mod_sandbox/6-3_newCells_InMod.stan", iter=4000, 
+            data=d_SB1, thin=50, init=0, chains=8, seed=4337)
 gg.nu <- ggs(out, "n_eta") %>% 
   # filter(!grepl("_new", .$Parameter)) %>%
   arrange(Parameter, Chain, Iteration)
