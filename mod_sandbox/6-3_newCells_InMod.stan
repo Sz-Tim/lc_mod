@@ -101,7 +101,7 @@ model {
   
   //covariance priors
   for(j in 1:2) {
-    L_Omega[j] ~ lkj_corr_cholesky(5);
+    L_Omega[j] ~ lkj_corr_cholesky(8);
   }
  
   //nu priors
