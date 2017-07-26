@@ -157,7 +157,7 @@ gg.nu %>% group_by(LC) %>%
 
 
 
-# Bias correction & pr(WP|Evg)
+# Speed testing
 ```{r veg_SB1_6}
 time.df <- tibble(n=c(10, 500, 1000, 3000, 7500))
 time.ls <- vector("list", length=4) 
@@ -387,8 +387,7 @@ gg.nu %>% group_by(LC) %>%
 
 
 
-
-
+# First attempt with Y2-only cells
 ```{r pred_test}
 # data from test grid (1-acre composition)
 grnt <- read.csv("data/out_02_2a_grnt.csv") %>% as.matrix
@@ -511,6 +510,7 @@ ggplot(gg.new, aes(x=nuNew, y=Y2New)) + geom_point(alpha=0.2) +
 
 ```
 
+# Blocks: real data
 ```{r block_test}
 # data from test grid
 grdSz <- "01_1a"
@@ -562,10 +562,11 @@ Ydiff <- cbind(grnt[,1:3]-nlcd[,1:3],
 # Ydiff[Ydiff==0] <- NA
 
 dev.df <- data.frame(Yd1=Ydiff[,1], Yd2=Ydiff[,2], Yd3=Ydiff[,3], 
-                     Yd4=Ydiff[,4], Yd5=Ydiff[,5], pWP=grnt[,4]/(grnt[,4]+grnt[,5]+0.001),
+                     Yd4=Ydiff[,4], Yd5=Ydiff[,5],
+                     pWP=grnt[,4]/(grnt[,4]+grnt[,5]+0.001),
                      rLen=rdLen$lenSc, pop00=pop00$popSc,
                      tmean=clim$tmean, tseas=clim$tseas, precip=clim$precip)
-pairs(dev.df, lower.panel=panel.smooth, upper.panel=panel.cor)
+# pairs(dev.df, lower.panel=panel.smooth, upper.panel=panel.cor)
 cor(dev.df, use="pairwise")
 
 set.seed(2)
@@ -598,24 +599,6 @@ Xd[[4]] <- cbind(clim$tmean[allCell], clim$precip[allCell], rdLen$lenSc[allCell]
 nBp <- 2
 Xp <- cbind(clim$tmean[allCell], clim$precip[allCell])
 pWp <- dev.df$pWP[allCell]
-# # visualize data
-# par(mfrow=c(2,3))
-# for(i in 1:3) {
-#   plot(c(Y1.fit[,i], Y1.new[,i]), Y2[,i], 
-#        main=paste("LC:",i), col=rgb(0,0,0,0.5), ylim=c(0,1), xlim=c(0,1))
-#   abline(b=1, a=0, lty=3)
-# } 
-# plot(c(Y1.fit[,4], Y1.new[,4]), Y2[,4]*(antilogit(Xp %*% Bp)), 
-#      main="LC: 4", col=rgb(0,0,0,0.5), ylim=c(0,1), xlim=c(0,1))
-# abline(b=1, a=0, lty=3)
-# plot(c(Y1.fit[,5], Y1.new[,5]), Y2[,4]*(1-antilogit(Xp %*% Bp)), 
-#      main="LC: 5", col=rgb(0,0,0,0.5), ylim=c(0,1), xlim=c(0,1))
-# abline(b=1, a=0, lty=3)
-# plot(c(Y1.fit[,6], Y1.new[,6]), Y2[,5], 
-#      main="LC: 6", col=rgb(0,0,0,0.5), ylim=c(0,1), xlim=c(0,1))
-# abline(b=1, a=0, lty=3)
-
-
 
 # load data
 d_SB1 <- list(n1=nCell, n2=nCell+1, n3=totCell, L=6, 
@@ -692,7 +675,7 @@ ggplot(gg.EvgMed, aes(x=Y1, xend=Y1, y=Y2, yend=med, colour=abs(Y2-Y1)<abs(med-Y
 ggs_caterpillar(gg.b) + geom_vline(xintercept=0)
 ```
 
-
+# No blocks: Real data
 ```{r realData_test}
 # data from test grid
 grdSz <- "04_1k"
@@ -845,6 +828,8 @@ ggplot(gg.nu, aes(x=Y1, xend=Y1, y=Y2, yend=med, colour=abs(Y2-Y1)<abs(med-Y1)))
 
 ```
 
+
+# Blocks: Simulated data
 ```{r predictionsSimData}
 # data from test grid
 grdSz <- "01_1a"
