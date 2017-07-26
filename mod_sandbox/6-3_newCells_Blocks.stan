@@ -50,6 +50,7 @@ data {
   matrix[n3,nB_p] X_p;  //pr(WP|Evg) covariates
   matrix[n3,nB_d[1]] X_d1;  //bias covariates: Dev
   matrix[n3,nB_d[2]] X_d2;  //bias covariates: Oth
+  matrix[n3,nB_d[3]] X_d3;  //bias covariates: Hwd
   matrix[n3,nB_d[4]] X_d4;  //bias covariates: Evg
 }
 
@@ -63,6 +64,7 @@ parameters {
   vector[nB_p] beta_p;  //pr(WP|Evg) betas
   vector[nB_d[1]] beta_d1;  //bias betas: Dev
   vector[nB_d[2]] beta_d2;  //bias betas: Oth
+  vector[nB_d[3]] beta_d3;  //bias betas: Hwd
   vector[nB_d[4]] beta_d4;  //bias betas: Evg
 }
 
@@ -87,7 +89,7 @@ transformed parameters {
   ////fit betas using cells with Y1 & Y2
   Y2_ds[1:n1,1] = to_array_1d(Y2[1:n1,1] + (X_d1[1:n1,] * beta_d1));
   Y2_ds[1:n1,2] = to_array_1d(Y2[1:n1,2] + (X_d2[1:n1,] * beta_d2));
-  Y2_ds[,3] = to_array_1d(Y2[,3]);
+  Y2_ds[1:n1,3] = to_array_1d(Y2[1:n1,3] + (X_d3[1:n1,] * beta_d3));
   Y2_ds[1:n1,4] = to_array_1d((Y2[1:n1,4] + (X_d4[1:n1,] * beta_d4)) 
       .* inv_logit(X_p[1:n1,] * beta_p));
   Y2_ds[1:n1,5] = to_array_1d((Y2[1:n1,4] + (X_d4[1:n1,] * beta_d4)) 
@@ -96,14 +98,17 @@ transformed parameters {
   {
     vector[nB_d[1]] b_d1;
     vector[nB_d[2]] b_d2;
+    vector[nB_d[3]] b_d3;
     vector[nB_d[4]] b_d4;
     vector[nB_p] b_p;
     b_d1 = beta_d1;
     b_d2 = beta_d2;
+    b_d3 = beta_d3;
     b_d4 = beta_d4;
     b_p = beta_p;
     Y2_ds[n2:n3,1] = to_array_1d(Y2[n2:n3,1] + (X_d1[n2:n3,] * b_d1));
     Y2_ds[n2:n3,2] = to_array_1d(Y2[n2:n3,2] + (X_d2[n2:n3,] * b_d2));
+    Y2_ds[n2:n3,3] = to_array_1d(Y2[n2:n3,3] + (X_d3[n2:n3,] * b_d3));
     Y2_ds[n2:n3,4] = to_array_1d((Y2[n2:n3,4] + (X_d4[n2:n3,] * b_d4)) 
       .* inv_logit(X_p[n2:n3,] * b_p));
     Y2_ds[n2:n3,5] = to_array_1d((Y2[n2:n3,4] + (X_d4[n2:n3,] * b_d4)) 
