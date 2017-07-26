@@ -41,7 +41,7 @@ data {
   int n2;  //n1 + 1 (for indexing)
   int n3;  //number of cells for NLCD + covariates
   int L;  //number of land cover classes
-  int nB_d[L-1];  //number of bias covariates for each LC
+  int nB_d[L-2];  //number of bias covariates for each LC
   int nB_p;  //number of covariates for pr(WP|Evg)
   //landcover: observed
   row_vector<lower=0, upper=1>[L-1] Y1[n1];  //GRANIT proportions
