@@ -569,8 +569,8 @@ pairs(dev.df, lower.panel=panel.smooth, upper.panel=panel.cor)
 cor(dev.df, use="pairwise")
 
 set.seed(2)
-nCell <- 10
-nNew <- 2
+nCell <- 1300
+nNew <- 860
 totCell <- nCell + nNew
 allCell <- sample(1:nrow(grnt), totCell)
 fitCell <- allCell[1:nCell]
@@ -584,35 +584,36 @@ Y2 <- nlcd[allCell,]
 
 # covariates: bias (Dev, Oth, Hwd, Evg, Mxd)
 ## initialize
-nBd <- c(2, 1, 1, 2) 
-BCov <- c(1, 1, 0, 1)  # which deltas to model
+nBd <- c(3, 2, 1, 3) 
+BCov <- c(1, 1, 1, 1)  # which deltas to model
 Xd <- vector("list", nLC-2)
 ## fill
-Xd[[1]] <- cbind(rdLen$lenSc[allCell], pop00$popSc[allCell])
-Xd[[2]] <- matrix(rdLen$lenSc[allCell], ncol=1)
-Xd[[4]] <- cbind(clim$tmean[allCell], clim$tseas[allCell])
+Xd[[1]] <- cbind(rdLen$lenSc[allCell], pop00$popSc[allCell], clim$tmean[allCell])
+Xd[[2]] <- cbind(rdLen$lenSc[allCell], pop00$popSc[allCell])
+Xd[[3]] <- matrix(clim$tseas[allCell], ncol=1)
+Xd[[4]] <- cbind(clim$tmean[allCell], clim$precip[allCell], rdLen$lenSc[allCell])
 
 # covariates: WP|Evg
 ## initialize
 nBp <- 2
 Xp <- cbind(clim$tmean[allCell], clim$precip[allCell])
-
-# visualize data
-par(mfrow=c(2,3))
-for(i in 1:3) {
-  plot(c(Y1.fit[,i], Y1.new[,i]), Y2[,i], 
-       main=paste("LC:",i), col=rgb(0,0,0,0.5), ylim=c(0,1), xlim=c(0,1))
-  abline(b=1, a=0, lty=3)
-} 
-plot(c(Y1.fit[,4], Y1.new[,4]), Y2[,4]*(antilogit(Xp %*% Bp)), 
-     main="LC: 4", col=rgb(0,0,0,0.5), ylim=c(0,1), xlim=c(0,1))
-abline(b=1, a=0, lty=3)
-plot(c(Y1.fit[,5], Y1.new[,5]), Y2[,4]*(1-antilogit(Xp %*% Bp)), 
-     main="LC: 5", col=rgb(0,0,0,0.5), ylim=c(0,1), xlim=c(0,1))
-abline(b=1, a=0, lty=3)
-plot(c(Y1.fit[,6], Y1.new[,6]), Y2[,5], 
-     main="LC: 6", col=rgb(0,0,0,0.5), ylim=c(0,1), xlim=c(0,1))
-abline(b=1, a=0, lty=3)
+pWp <- dev.df$pWP[allCell]
+# # visualize data
+# par(mfrow=c(2,3))
+# for(i in 1:3) {
+#   plot(c(Y1.fit[,i], Y1.new[,i]), Y2[,i], 
+#        main=paste("LC:",i), col=rgb(0,0,0,0.5), ylim=c(0,1), xlim=c(0,1))
+#   abline(b=1, a=0, lty=3)
+# } 
+# plot(c(Y1.fit[,4], Y1.new[,4]), Y2[,4]*(antilogit(Xp %*% Bp)), 
+#      main="LC: 4", col=rgb(0,0,0,0.5), ylim=c(0,1), xlim=c(0,1))
+# abline(b=1, a=0, lty=3)
+# plot(c(Y1.fit[,5], Y1.new[,5]), Y2[,4]*(1-antilogit(Xp %*% Bp)), 
+#      main="LC: 5", col=rgb(0,0,0,0.5), ylim=c(0,1), xlim=c(0,1))
+# abline(b=1, a=0, lty=3)
+# plot(c(Y1.fit[,6], Y1.new[,6]), Y2[,5], 
+#      main="LC: 6", col=rgb(0,0,0,0.5), ylim=c(0,1), xlim=c(0,1))
+# abline(b=1, a=0, lty=3)
 
 
 
@@ -623,15 +624,15 @@ d_SB1 <- list(n1=nCell, n2=nCell+1, n3=totCell, L=6,
               X_d1=Xd[[1]], X_d2=Xd[[2]], X_d3=Xd[[3]], 
               X_d4=Xd[[4]], X_p=Xp)
 out <- stan(file="mod_sandbox/6-3_newCells_Blocks.stan", iter=2000, 
-            data=d_SB1, thin=50, init=0, chains=4, seed=4337)
+            data=d_SB1, thin=50, init=0, chains=8, seed=4337)
 gg.nu <- ggs(out, "n_eta") %>% 
   # filter(!grepl("_new", .$Parameter)) %>%
   arrange(Parameter, Chain, Iteration)
 nGG <- attr(gg.nu, "nChains")*attr(gg.nu, "nIterations")
 gg.nu %<>% mutate(Y1=t(rbind(Y1.fit, Y1.new)) %>% c %>% rep(each=nGG),
-                  Y2=t(cbind(Y2[,1:3], 
-                             Y2[,4]*antilogit(Xp %*% Bp), 
-                             Y2[,4]*(1-antilogit(Xp %*% Bp)), 
+                  Y2=t(cbind(Y2[,1:3],
+                             Y2[,4]*pWp,
+                             Y2[,4]*(1-pWp),
                              Y2[,5])) %>% c %>% rep(each=nGG),
                   LC=1:6 %>% rep(each=nGG) %>% rep(times=totCell),
                   Cell=1:totCell %>% rep(each=nGG*6),
@@ -642,6 +643,15 @@ gg.med <- gg.nu %>% group_by(Cell, LC, Set, Parameter) %>%
             q75=quantile(value, 0.75), q95=quantile(value, 0.95),
             Y1=first(Y1), Y2=first(Y2)) %>%
   ungroup() %>% group_by(Cell)
+
+gg.EvgComb <- gg.nu
+gg.EvgComb$LC[gg.EvgComb$LC==5] <- 4
+gg.EvgMed <- gg.EvgComb %>% group_by(Cell, LC, Set, Parameter) %>%
+  summarise(med=median(value), q05=quantile(value, 0.05), q25=quantile(value, 0.25),
+            q75=quantile(value, 0.75), q95=quantile(value, 0.95),
+            Y1=first(Y1), Y2=first(Y2)) 
+
+gg.b <- ggs(out, "beta")
 
 ggplot(gg.med, aes(x=Y1, y=med, ymin=q25, ymax=q75)) + xlim(0,1) + ylim(0,1) + 
   geom_pointrange(alpha=0.5, colour="dodgerblue", fatten=1.5) + 
@@ -664,14 +674,21 @@ gg.med %>% ungroup %>% group_by(Set, LC) %>%
   summarise(rmse.mod=(med-Y1)^2 %>% mean %>% sqrt %>% round(3),
             rmse.Y2=(Y2-Y1)^2 %>% mean %>% sqrt %>% round(3),
             diff=rmse.mod-rmse.Y2)
+gg.EvgMed %>% ungroup %>% group_by(Set, LC) %>%
+  summarise(rmse.mod=(med-Y1)^2 %>% mean %>% sqrt %>% round(3),
+            rmse.Y2=(Y2-Y1)^2 %>% mean %>% sqrt %>% round(3),
+            diff=rmse.mod-rmse.Y2)
 
 ggplot(gg.med, aes(x=Y1, xend=Y1, y=Y2, yend=med, colour=abs(Y2-Y1)<abs(med-Y1))) + xlim(0,1) + ylim(0,1) +
     geom_abline(slope=1, linetype=3) + scale_colour_manual(values=c("darkgreen", "red")) +
     geom_segment(arrow=arrow(length=unit(0.1, "cm")), alpha=0.4) + facet_grid(Set~LC) +
-    labs(x="Y1", y="Y2 -> median", main="no betas") + theme(legend.position="none")
+    labs(x="Y1", y="Y2 -> median") + theme(legend.position="none")
+ggplot(gg.EvgMed, aes(x=Y1, xend=Y1, y=Y2, yend=med, colour=abs(Y2-Y1)<abs(med-Y1))) +
+    xlim(0,1) + ylim(0,1) +
+    geom_abline(slope=1, linetype=3) + scale_colour_manual(values=c("darkgreen", "red")) +
+    geom_segment(arrow=arrow(length=unit(0.1, "cm")), alpha=0.4) + facet_grid(Set~LC) +
+    labs(x="Y1", y="Y2 -> median") + theme(legend.position="none")
 
-
-gg.b <- ggs(out, "beta")
 ggs_caterpillar(gg.b) + geom_vline(xintercept=0)
 ```
 
