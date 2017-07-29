@@ -56,7 +56,7 @@ nlcd <- read_csv(paste0("data/out_",grdSz,"_nlcd.csv"))  %>%
 
 ```{r modelSetup}
 # small scale runs: set nCell for Y1&Y2 and Y2
-set.seed(21)
+set.seed(212)
 nFit <- 1200
 nNew <- 800
 n <- sampleCells(nFit, nNew, nrow(grnt))
@@ -85,11 +85,12 @@ d <- list(n1=nFit, n2=nFit+1, n3=n$tot, L=6, nB_d=nBd, nB_p=nBp,
           Y1=Y1.fit[,-6], Y2=Y2[,-5], 
           X_d1=Xd[[1]], X_d2=Xd[[2]], X_d3=Xd[[3]], X_d4=Xd[[4]], X_p=Xp)
 out <- stan(file="code/LC_mod.stan", data=d, init=0, thin=50, 
-            iter=10000, warmup=6000, chains=8, seed=4337)
+            iter=10000, warmup=6000, chains=8, seed=4337, 
+            control=list(max_treedepth=15))
 ```
 
 
-```{r outNu}
+```{r outNu, fig.width=8, fig.height=3.5}
 ##########
 ## munging
 ##########
