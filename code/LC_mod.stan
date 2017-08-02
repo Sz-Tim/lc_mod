@@ -66,6 +66,8 @@ parameters {
   vector[nB_d[2]] beta_d2;  //bias betas: Oth
   vector[nB_d[3]] beta_d3;  //bias betas: Hwd
   vector[nB_d[4]] beta_d4;  //bias betas: Evg
+  real mu_d;
+  real<lower=0> sig_d;
 }
 
 transformed parameters {
@@ -135,9 +137,11 @@ model {
   
   //beta priors
   beta_p ~ normal(0, 1);
-  beta_d1 ~ normal(0, 1);
-  beta_d2 ~ normal(0, 1);
-  beta_d4 ~ normal(0, 1);
+  beta_d1 ~ normal(mu_d, sig_d);
+  beta_d2 ~ normal(mu_d, sig_d);
+  beta_d4 ~ normal(mu_d, sig_d);
+  mu_d ~ normal(0, 0.1);
+  sig_d ~ cauchy(0, 4);
   
   //likelihood
    Y1 ~ multi_normal_cholesky(nu[1:n1], L_Sigma[1]);
