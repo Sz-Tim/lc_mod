@@ -56,7 +56,7 @@ nlcd <- read_csv(paste0("data/out_",grdSz,"_nlcd.csv"))  %>%
 
 ```{r modelSetup}
 # small scale runs: set nCell for Y1&Y2 and Y2
-set.seed(212)
+set.seed(2121)
 nFit <- 1200
 nNew <- 800
 n <- sampleCells(nFit, nNew, nrow(grnt))
@@ -85,7 +85,7 @@ d <- list(n1=nFit, n2=nFit+1, n3=n$tot, L=6, nB_d=nBd, nB_p=nBp,
           Y1=Y1.fit[,-6], Y2=Y2[,-5], 
           X_d1=Xd[[1]], X_d2=Xd[[2]], X_d3=Xd[[3]], X_d4=Xd[[4]], X_p=Xp)
 out <- stan(file="code/LC_mod.stan", data=d, init=0, thin=50, 
-            iter=10000, warmup=6000, chains=8, seed=4337, 
+            iter=6000, warmup=4000, chains=8, seed=43337, 
             control=list(max_treedepth=15))
 ```
 
@@ -172,5 +172,6 @@ stan_ess(out)
 stan_diag(out)
 stan_rhat(out)
 ggs_crosscorrelation(gg.b)
+shinystan::launch_shinystan(out)
 ```
 
