@@ -54,6 +54,7 @@ data {
   matrix[n3,nB_d[4]] X_d4;  //bias covariates: Evg
 }
 transformed data {
+  int n_beta_d;  //total number of beta_ds
   // indexes for bias betas
   int d1_2;  //last d1 beta
   int d2_1;  //first d2 beta
@@ -63,6 +64,7 @@ transformed data {
   int d4_1;  //first d4 beta
   int d4_2;  //last d4 beta
   
+  n_beta_d = sum(nB_d);
   d1_2 = nB_d[1];
   d2_1 = d1_2 + 1;
   d2_2 = d1_2 + nB_d[2];
@@ -73,16 +75,16 @@ transformed data {
 }
 
 parameters {
-  //covariance
+  //landcover: covariance
   cholesky_factor_corr[L-1] L_Omega[2]; //covariance matrix for Y1 & Y2
   vector<lower=0, upper=pi()/2>[L-1] L_sigma_unif[2];  //covariance
   //landcover: latent non-constrained
   vector<lower=-1, upper=2>[L-1] nu[n3];  //latent LC proportions
   //betas
   vector[nB_p] beta_p;  //pr(WP|Evg) betas
-  vector[sum(nB_d)] beta_d;  //bias betas
-  real mu_d;
-  real<lower=0> sig_d;
+  vector[n_beta_d] beta_d;  //bias betas
+  vector[n_beta_d] mu_d;
+  cov_matrix[n_beta_d] sig_d;
 }
 
 transformed parameters {
@@ -118,7 +120,7 @@ transformed parameters {
       .* (1-inv_logit(X_p[1:n1,] * beta_p)));
   ////correct for bias in cells with only Y2 using fit betas
   {
-    vector[sum(nB_d)] b_d;
+    vector[n_beta_d] b_d;
     vector[nB_p] b_p;
     b_d = beta_d;
     b_p = beta_p;
@@ -156,7 +158,7 @@ model {
   
   //beta priors
   beta_p ~ normal(0, 1);
-  beta_d ~ normal(0, 0.1);
+  beta_d ~ multi_normal(mu_d, sig_d);
   
   //likelihood
    Y1 ~ multi_normal_cholesky(nu[1:n1], L_Sigma[1]);
