@@ -565,6 +565,7 @@ dev.df <- data.frame(Yd1=Ydiff[,1], Yd2=Ydiff[,2], Yd3=Ydiff[,3],
                      Yd4=Ydiff[,4], Yd5=Ydiff[,5],
                      pWP=grnt[,4]/(grnt[,4]+grnt[,5]+0.001),
                      rLen=rdLen$lenSc, pop00=pop00$popSc,
+                     secHome=hous00$secHomeSc,
                      tmean=clim$tmean, tseas=clim$tseas, precip=clim$precip)
 # pairs(dev.df, lower.panel=panel.smooth, upper.panel=panel.cor)
 cor(dev.df, use="pairwise")
