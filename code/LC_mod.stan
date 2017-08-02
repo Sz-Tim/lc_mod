@@ -53,6 +53,24 @@ data {
   matrix[n3,nB_d[3]] X_d3;  //bias covariates: Hwd
   matrix[n3,nB_d[4]] X_d4;  //bias covariates: Evg
 }
+transformed data {
+  // indexes for bias betas
+  int d1_2;  //last d1 beta
+  int d2_1;  //first d2 beta
+  int d2_2;  //last d2 beta
+  int d3_1;  //first d3 beta
+  int d3_2;  //last d3 beta
+  int d4_1;  //first d4 beta
+  int d4_2;  //last d4 beta
+  
+  d1_2 = nB_d[1];
+  d2_1 = d1_2 + 1;
+  d2_2 = d1_2 + nB_d[2];
+  d3_1 = d2_2 + 1;
+  d3_2 = d2_2 + nB_d[3];
+  d4_1 = d3_2 + 1;
+  d4_2 = d3_2 + nB_d[4];
+}
 
 parameters {
   //covariance
@@ -62,10 +80,7 @@ parameters {
   row_vector<lower=-1, upper=2>[L-1] nu[n3];  //latent LC proportions
   //betas
   vector[nB_p] beta_p;  //pr(WP|Evg) betas
-  vector[nB_d[1]] beta_d1;  //bias betas: Dev
-  vector[nB_d[2]] beta_d2;  //bias betas: Oth
-  vector[nB_d[3]] beta_d3;  //bias betas: Hwd
-  vector[nB_d[4]] beta_d4;  //bias betas: Evg
+  vector[sum(nB_d)] beta_d;  //bias betas
   real mu_d;
   real<lower=0> sig_d;
 }
@@ -89,32 +104,36 @@ transformed parameters {
   
   //correct bias & split WP to [,4] and Evg to [,5]
   ////fit betas using cells with Y1 & Y2
-  Y2_ds[1:n1,1] = to_array_1d(Y2[1:n1,1] + (X_d1[1:n1,] * beta_d1));
-  Y2_ds[1:n1,2] = to_array_1d(Y2[1:n1,2] + (X_d2[1:n1,] * beta_d2));
-  Y2_ds[1:n1,3] = to_array_1d(Y2[1:n1,3] + (X_d3[1:n1,] * beta_d3));
-  Y2_ds[1:n1,4] = to_array_1d((Y2[1:n1,4] + (X_d4[1:n1,] * beta_d4)) 
+  Y2_ds[1:n1,1] = to_array_1d(Y2[1:n1,1] 
+      + (X_d1[1:n1,] * beta_d[1:d1_2]));
+  Y2_ds[1:n1,2] = to_array_1d(Y2[1:n1,2] 
+      + (X_d2[1:n1,] * beta_d[d2_1:d2_2]));
+  Y2_ds[1:n1,3] = to_array_1d(Y2[1:n1,3] 
+      + (X_d3[1:n1,] * beta_d[d3_1:d3_2]));
+  Y2_ds[1:n1,4] = to_array_1d((Y2[1:n1,4] 
+      + (X_d4[1:n1,] * beta_d[d4_1:d4_2])) 
       .* inv_logit(X_p[1:n1,] * beta_p));
-  Y2_ds[1:n1,5] = to_array_1d((Y2[1:n1,4] + (X_d4[1:n1,] * beta_d4)) 
+  Y2_ds[1:n1,5] = to_array_1d((Y2[1:n1,4] 
+      + (X_d4[1:n1,] * beta_d[d4_1:d4_2])) 
       .* (1-inv_logit(X_p[1:n1,] * beta_p)));
   ////correct for bias in cells with only Y2 using fit betas
   {
-    vector[nB_d[1]] b_d1;
-    vector[nB_d[2]] b_d2;
-    vector[nB_d[3]] b_d3;
-    vector[nB_d[4]] b_d4;
+    vector[sum(nB_d)] b_d;
     vector[nB_p] b_p;
-    b_d1 = beta_d1;
-    b_d2 = beta_d2;
-    b_d3 = beta_d3;
-    b_d4 = beta_d4;
+    b_d = beta_d;
     b_p = beta_p;
-    Y2_ds[n2:n3,1] = to_array_1d(Y2[n2:n3,1] + (X_d1[n2:n3,] * b_d1));
-    Y2_ds[n2:n3,2] = to_array_1d(Y2[n2:n3,2] + (X_d2[n2:n3,] * b_d2));
-    Y2_ds[n2:n3,3] = to_array_1d(Y2[n2:n3,3] + (X_d3[n2:n3,] * b_d3));
-    Y2_ds[n2:n3,4] = to_array_1d((Y2[n2:n3,4] + (X_d4[n2:n3,] * b_d4)) 
-      .* inv_logit(X_p[n2:n3,] * b_p));
-    Y2_ds[n2:n3,5] = to_array_1d((Y2[n2:n3,4] + (X_d4[n2:n3,] * b_d4)) 
-      .* (1-inv_logit(X_p[n2:n3,] * b_p)));
+    Y2_ds[n2:n3,1] = to_array_1d(Y2[n2:n3,1] 
+        + (X_d1[n2:n3,] * b_d[1:d1_2]));
+    Y2_ds[n2:n3,2] = to_array_1d(Y2[n2:n3,2] 
+        + (X_d2[n2:n3,] * b_d[d2_1:d2_2]));
+    Y2_ds[n2:n3,3] = to_array_1d(Y2[n2:n3,3] 
+        + (X_d3[n2:n3,] * b_d[d3_1:d3_2]));
+    Y2_ds[n2:n3,4] = to_array_1d((Y2[n2:n3,4] 
+        + (X_d4[n2:n3,] * b_d[d4_1:d4_2])) 
+        .* inv_logit(X_p[n2:n3,] * b_p));
+    Y2_ds[n2:n3,5] = to_array_1d((Y2[n2:n3,4] 
+        + (X_d4[n2:n3,] * b_d[d4_1:d4_2])) 
+        .* (1-inv_logit(X_p[n2:n3,] * b_p)));
   }
   
   //nu to eta
@@ -137,11 +156,7 @@ model {
   
   //beta priors
   beta_p ~ normal(0, 1);
-  beta_d1 ~ normal(mu_d, sig_d);
-  beta_d2 ~ normal(mu_d, sig_d);
-  beta_d4 ~ normal(mu_d, sig_d);
-  mu_d ~ normal(0, 0.1);
-  sig_d ~ cauchy(0, 4);
+  beta_d ~ normal(0, 0.1);
   
   //likelihood
    Y1 ~ multi_normal_cholesky(nu[1:n1], L_Sigma[1]);
