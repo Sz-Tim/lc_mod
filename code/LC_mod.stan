@@ -76,31 +76,48 @@ transformed data {
 
 parameters {
   //landcover: covariance
-  cholesky_factor_corr[L-1] L_Omega[2]; //covariance matrix for Y1 & Y2
-  vector<lower=0, upper=pi()/2>[L-1] L_sigma_unif[2];  //covariance
+  cholesky_factor_corr[L-1] Omega_L[2]; //covariance matrix for Y1 & Y2
+  vector<lower=0, upper=pi()/2>[L-1] sigma_L_unif[2];  //covariance
   //landcover: latent non-constrained
   vector<lower=-1, upper=2>[L-1] nu[n3];  //latent LC proportions
-  //betas
-  vector[nB_p] beta_p;  //pr(WP|Evg) betas
-  vector[n_beta_d] beta_d;  //bias betas
-  vector[n_beta_d] mu_d;
-  cov_matrix[n_beta_d] sig_d;
+  //betas: pr(WP|Evg)
+  vector[nB_p] z_p;  //beta_d covariance scaling
+  cholesky_factor_corr[nB_p] Omega_p;
+  vector<lower=0, upper=pi()/2>[nB_p] tau_unif_p;
+  //betas: bias
+  vector[n_beta_d] z_d;  //beta_d covariance scaling
+  cholesky_factor_corr[n_beta_d] Omega_d;
+  vector<lower=0, upper=pi()/2>[n_beta_d] tau_unif_d;
+  
 }
 
 transformed parameters {
   //covariance
-  vector<lower=0>[L-1] L_sigma[2];  //covariance matrix for Y1 & Y2
-  matrix[L-1,L-1] L_Sigma[2];
+  vector<lower=0>[L-1] sigma_L[2];  //covariance matrix for Y1 & Y2
+  matrix[L-1,L-1] Sigma_L[2];
   //NLCD de-biasing and splitting
   vector[L-1] Y2_ds[n3];  //unbiased, split NLCD
   //landcover: latent compositional
   simplex[L] n_eta[n3];  //gjam transformed nu
+  //beta_p
+  vector[nB_p] beta_p;
+  vector<lower=0>[nB_p] tau_p;
+  //beta_d
+  vector[n_beta_d] beta_d;
+  vector<lower=0>[n_beta_d] tau_d;
   
   
-  // L_sigma ~ cauchy(0, 2.5) --- reparameterized for speed
+  //beta covariance
+  tau_p = 2.5 * tan(tau_unif_p);
+  beta_p = diag_pre_multiply(tau_p, Omega_p) * z_p;
+  tau_d = 2.5 * tan(tau_unif_d);
+  beta_d = diag_pre_multiply(tau_d, Omega_d) * z_d;
+  
+  
+  // sigma_L ~ cauchy(0, 2.5) --- reparameterized for speed
   for(j in 1:2) {
-    L_sigma[j] = 2.5 * tan(L_sigma_unif[j]);
-    L_Sigma[j] = diag_pre_multiply(L_sigma[j], L_Omega[j]);
+    sigma_L[j] = 2.5 * tan(sigma_L_unif[j]);
+    Sigma_L[j] = diag_pre_multiply(sigma_L[j], Omega_L[j]);
   }
   
   
@@ -146,9 +163,9 @@ transformed parameters {
 
 model {
   
-  //covariance priors
+  //landcover covariance priors
   for(j in 1:2) {
-    L_Omega[j] ~ lkj_corr_cholesky(8);
+    Omega_L[j] ~ lkj_corr_cholesky(8);
   }
  
   //nu priors
@@ -157,11 +174,13 @@ model {
   }
   
   //beta priors
-  beta_p ~ normal(0, 1);
-  beta_d ~ multi_normal(mu_d, sig_d);
+  z_p ~ normal(0, 1);
+  Omega_p ~ lkj_corr_cholesky(2);
+  z_d ~ normal(0, 1);
+  Omega_d ~ lkj_corr_cholesky(2);
   
   //likelihood
-   Y1 ~ multi_normal_cholesky(nu[1:n1], L_Sigma[1]);
-   Y2_ds ~ multi_normal_cholesky(nu, L_Sigma[2]);
+   Y1 ~ multi_normal_cholesky(nu[1:n1], Sigma_L[1]);
+   Y2_ds ~ multi_normal_cholesky(nu, Sigma_L[2]);
 }
 
