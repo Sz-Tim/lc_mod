@@ -28,6 +28,10 @@ pop00 <- read_csv(paste0("data/pop00_", grdSz, ".csv")) %>%
   rename(CellID=category) %>% 
   add_blocks(cb.i=cb.i) %>% summarise(popTot=sum(sum)) %>% 
   ungroup %>% mutate(popSc=scale(popTot))
+hous00 <- read_csv(paste0("data/housing00_", grdSz, ".csv")) %>% 
+  rename(CellID=category) %>% 
+  add_blocks(cb.i=cb.i) %>% summarise(secHome=sum(sum)) %>% 
+  ungroup %>% mutate(secHomeSc=scale(secHome))
 rdLen <- read_csv(paste0("data/roads_", grdSz, ".csv")) %>% 
   add_blocks(cb.i=cb.i) %>% summarise(rdLen=sum(roadLen)) %>% 
   ungroup %>% mutate(lenSc=scale(rdLen))
@@ -53,7 +57,7 @@ nlcd <- read_csv(paste0("data/out_",grdSz,"_nlcd.csv"))  %>%
 
 ```r
 # small scale runs: set nCell for Y1&Y2 and Y2
-set.seed(222)
+set.seed(2121)
 nFit <- 1200
 nNew <- 800
 n <- sampleCells(nFit, nNew, nrow(grnt))
@@ -65,7 +69,7 @@ Y2 <- nlcd[n$all,]
 
 # covariates: bias (Dev, Oth, Hwd, Evg, Mxd)
 Xd <- vector("list", 4)
-Xd[[1]] <- cbind(rdLen$lenSc[n$all], pop00$popSc[n$all], clim$tmean[n$all])
+Xd[[1]] <- cbind(rdLen$lenSc[n$all], hous00$secHomeSc[n$all], clim$tmean[n$all])
 Xd[[2]] <- cbind(rdLen$lenSc[n$all], pop00$popSc[n$all])
 Xd[[3]] <- matrix(clim$tseas[n$all], ncol=1)
 Xd[[4]] <- cbind(clim$tmean[n$all], clim$precip[n$all], rdLen$lenSc[n$all])
@@ -83,12 +87,17 @@ d <- list(n1=nFit, n2=nFit+1, n3=n$tot, L=6, nB_d=nBd, nB_p=nBp,
           Y1=Y1.fit[,-6], Y2=Y2[,-5], 
           X_d1=Xd[[1]], X_d2=Xd[[2]], X_d3=Xd[[3]], X_d4=Xd[[4]], X_p=Xp)
 out <- stan(file="code/LC_mod.stan", data=d, init=0, thin=50, 
-            iter=10000, warmup=6000, chains=8, seed=4337, 
+            iter=20000, warmup=15000, chains=8, seed=43337, 
             control=list(max_treedepth=15))
 ```
 
 ```
 ## Loading required namespace: rstudioapi
+```
+
+```
+## Warning: There were 7 divergent transitions after warmup. Increasing adapt_delta above 0.8 may help. See
+## http://mc-stan.org/misc/warnings.html#divergent-transitions-after-warmup
 ```
 
 ```
@@ -189,18 +198,18 @@ gg.med %>% ungroup %>% group_by(Set, LC) %>%
 ## # Groups:   Set [?]
 ##      Set    LC rmse.mod
 ##    <chr> <int>    <dbl>
-##  1 Y1+Y2     1    0.027
-##  2 Y1+Y2     2    0.044
-##  3 Y1+Y2     3    0.112
-##  4 Y1+Y2     4    0.053
-##  5 Y1+Y2     5    0.066
-##  6 Y1+Y2     6    0.101
-##  7    Y2     1    0.065
-##  8    Y2     2    0.104
-##  9    Y2     3    0.171
-## 10    Y2     4    0.095
+##  1 Y1+Y2     1    0.045
+##  2 Y1+Y2     2    0.067
+##  3 Y1+Y2     3    0.078
+##  4 Y1+Y2     4    0.046
+##  5 Y1+Y2     5    0.059
+##  6 Y1+Y2     6    0.088
+##  7    Y2     1    0.064
+##  8    Y2     2    0.089
+##  9    Y2     3    0.177
+## 10    Y2     4    0.096
 ## 11    Y2     5    0.116
-## 12    Y2     6    0.175
+## 12    Y2     6    0.173
 ```
 
 ```r
@@ -215,16 +224,16 @@ gg.EvgMed %>% ungroup %>% group_by(Set, LC) %>%
 ## # Groups:   Set [?]
 ##      Set    LC rmse.mod rmse.Y2   diff   prop
 ##    <chr> <dbl>    <dbl>   <dbl>  <dbl>  <dbl>
-##  1 Y1+Y2     1    0.027   0.073 -0.046 -0.630
-##  2 Y1+Y2     2    0.044   0.103 -0.059 -0.573
-##  3 Y1+Y2     3    0.112   0.189 -0.077 -0.407
-##  4 Y1+Y2     4    0.092   0.200 -0.108 -0.540
-##  5 Y1+Y2     6    0.101   0.214 -0.113 -0.528
-##  6    Y2     1    0.065   0.075 -0.010 -0.133
-##  7    Y2     2    0.104   0.111 -0.007 -0.063
-##  8    Y2     3    0.171   0.181 -0.010 -0.055
-##  9    Y2     4    0.107   0.202 -0.095 -0.470
-## 10    Y2     6    0.175   0.211 -0.036 -0.171
+##  1 Y1+Y2     1    0.045   0.073 -0.028 -0.384
+##  2 Y1+Y2     2    0.067   0.109 -0.042 -0.385
+##  3 Y1+Y2     3    0.078   0.182 -0.104 -0.571
+##  4 Y1+Y2     4    0.093   0.194 -0.101 -0.521
+##  5 Y1+Y2     6    0.088   0.211 -0.123 -0.583
+##  6    Y2     1    0.064   0.073 -0.009 -0.123
+##  7    Y2     2    0.089   0.098 -0.009 -0.092
+##  8    Y2     3    0.177   0.186 -0.009 -0.048
+##  9    Y2     4    0.105   0.210 -0.105 -0.500
+## 10    Y2     6    0.173   0.212 -0.039 -0.184
 ```
 
 
@@ -249,17 +258,17 @@ gg.b %>% group_by(Parameter) %>%
 ## # A tibble: 11 x 6
 ##     Parameter   q025    q25    med    q75   q975
 ##        <fctr>  <dbl>  <dbl>  <dbl>  <dbl>  <dbl>
-##  1 beta_d1[1]  0.015  0.018  0.020  0.021  0.024
-##  2 beta_d1[2] -0.004 -0.001  0.000  0.001  0.004
-##  3 beta_d1[3]  0.008  0.010  0.012  0.013  0.016
-##  4 beta_d2[1] -0.042 -0.038 -0.036 -0.034 -0.030
-##  5 beta_d2[2] -0.002  0.002  0.004  0.005  0.008
-##  6 beta_d3[1] -0.057 -0.050 -0.046 -0.043 -0.035
-##  7 beta_d4[1] -0.082 -0.076 -0.073 -0.071 -0.066
-##  8 beta_d4[2] -0.027 -0.022 -0.019 -0.016 -0.012
-##  9 beta_d4[3]  0.012  0.015  0.017  0.020  0.023
-## 10  beta_p[1]  0.605  0.668  0.709  0.744  0.815
-## 11  beta_p[2] -0.267 -0.197 -0.161 -0.129 -0.067
+##  1 beta_d1[1]  0.013  0.016  0.018  0.019  0.022
+##  2 beta_d1[2] -0.001  0.001  0.003  0.004  0.006
+##  3 beta_d1[3]  0.009  0.011  0.013  0.014  0.017
+##  4 beta_d2[1] -0.038 -0.033 -0.031 -0.028 -0.024
+##  5 beta_d2[2] -0.004  0.000  0.001  0.004  0.008
+##  6 beta_d3[1] -0.055 -0.050 -0.046 -0.043 -0.036
+##  7 beta_d4[1] -0.080 -0.075 -0.072 -0.069 -0.064
+##  8 beta_d4[2] -0.024 -0.019 -0.017 -0.014 -0.009
+##  9 beta_d4[3]  0.002  0.006  0.008  0.011  0.015
+## 10  beta_p[1]  0.645  0.717  0.760  0.796  0.880
+## 11  beta_p[2] -0.379 -0.319 -0.288 -0.251 -0.185
 ```
 
 
@@ -299,4 +308,27 @@ ggs_crosscorrelation(gg.b)
 ```
 
 ![plot of chunk outDiag](LC_runTest/outDiag-4.png)
+
+```r
+shinystan::launch_shinystan(out)
+```
+
+```
+## 
+## Creating shinystan object...
+```
+
+```
+## 
+## Launching ShinyStan interface... for large models this  may take some time.
+```
+
+```
+## Loading required package: shiny
+```
+
+```
+## 
+## Listening on http://127.0.0.1:4829
+```
 
