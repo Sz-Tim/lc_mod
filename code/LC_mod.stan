@@ -97,8 +97,6 @@ transformed parameters {
   matrix[L-1,L-1] Sigma_L[2];
   //NLCD de-biasing and splitting
   vector[L-1] Y2_ds[n3];  //unbiased, split NLCD
-  //landcover: latent compositional
-  simplex[L] n_eta[n3];  //gjam transformed nu
   //beta_p
   vector[nB_p] beta_p;
   vector<lower=0>[nB_p] tau_p;
@@ -154,11 +152,6 @@ transformed parameters {
         + (X_d4[n2:n3,] * b_d[d4_1:d4_2])) 
         .* (1-inv_logit(X_p[n2:n3,] * b_p)));
   }
-  
-  //nu to eta
-  for(n in 1:(n3)) {
-    n_eta[n] = tr_gjam_inv(nu[n]);
-  }
 }
 
 model {
@@ -175,12 +168,21 @@ model {
   
   //beta priors
   z_p ~ normal(0, 1);
-  Omega_p ~ lkj_corr_cholesky(2);
+  Omega_p ~ lkj_corr_cholesky(8);
   z_d ~ normal(0, 1);
-  Omega_d ~ lkj_corr_cholesky(2);
+  Omega_d ~ lkj_corr_cholesky(8);
   
   //likelihood
    Y1 ~ multi_normal_cholesky(nu[1:n1], Sigma_L[1]);
    Y2_ds ~ multi_normal_cholesky(nu, Sigma_L[2]);
 }
 
+generated quantities {
+  //landcover: latent compositional
+  simplex[L] n_eta[n3];  //gjam transformed nu
+  
+  //nu to eta
+  for(n in 1:(n3)) {
+    n_eta[n] = tr_gjam_inv(nu[n]);
+  }
+}
