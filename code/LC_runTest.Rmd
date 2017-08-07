@@ -60,9 +60,9 @@ nlcd <- read_csv(paste0("data/out_",grdSz,"_nlcd.csv"))  %>%
 
 ```{r modelSetup}
 # small scale runs: set nCell for Y1&Y2 and Y2
-set.seed(2121)
-nFit <- 1200
-nNew <- 800
+set.seed(2211)
+nFit <- 60
+nNew <- 40
 n <- sampleCells(nFit, nNew, nrow(grnt))
 
 # Y1 & Y2
@@ -72,10 +72,10 @@ Y2 <- nlcd[n$all,]
 
 # covariates: bias (Dev, Oth, Hwd, Evg, Mxd)
 Xd <- vector("list", 4)
-Xd[[1]] <- cbind(rdLen$lenSc[n$all], hous00$secHomeSc[n$all], clim$tmean[n$all])
+Xd[[1]] <- cbind(rdLen$lenSc[n$all], hous00$secHomeSc[n$all])#, clim$tmean[n$all])
 Xd[[2]] <- cbind(rdLen$lenSc[n$all], pop00$popSc[n$all])
 Xd[[3]] <- matrix(clim$tseas[n$all], ncol=1)
-Xd[[4]] <- cbind(clim$tmean[n$all], clim$precip[n$all], rdLen$lenSc[n$all])
+Xd[[4]] <- cbind(clim$tmean[n$all], clim$precip[n$all])#, rdLen$lenSc[n$all])
 nBd <- map_int(Xd, ncol)  # nBeta for each covariate
 
 # covariates: WP|Evg
@@ -88,9 +88,10 @@ nBp <- ncol(Xp)
 d <- list(n1=nFit, n2=nFit+1, n3=n$tot, L=6, nB_d=nBd, nB_p=nBp,
           Y1=Y1.fit[,-6], Y2=Y2[,-5], 
           X_d1=Xd[[1]], X_d2=Xd[[2]], X_d3=Xd[[3]], X_d4=Xd[[4]], X_p=Xp)
-out <- stan(file="code/LC_mod.stan", data=d, init=0, thin=50, 
-            iter=20000, warmup=15000, chains=8, seed=43337, 
-            control=list(max_treedepth=15))
+out <- stan(file="code/LC_mod_uvBeta.stan", data=d, init=0, thin=50, 
+            iter=1000, warmup=700, chains=4, seed=4337, refresh=500,
+            include=FALSE, pars="Y2_ds", "nu",
+            control=list(max_treedepth=20, adapt_delta=0.95, metric="diag_e"))
 ```
 
 
@@ -162,6 +163,7 @@ gg.EvgMed %>% ungroup %>% group_by(Set, LC) %>%
 ```{r outBeta}
 gg.b <- ggs(out, "beta")
 ggs_caterpillar(gg.b) + geom_vline(xintercept=0)
+ggs_traceplot(gg.b) + facet_wrap(~Parameter, scales="free")
 gg.b %>% group_by(Parameter) %>%
   summarise(q025=quantile(value, 0.025) %>% round(3), 
             q25=quantile(value, 0.25) %>% round(3),
