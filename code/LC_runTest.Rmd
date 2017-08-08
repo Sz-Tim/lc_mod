@@ -43,6 +43,8 @@ clim <- read_csv(paste0("data/clim_", grdSz, ".csv")) %>%
   add_blocks(cb.i=cb.i) %>%  
   summarise(b1=mean(bio1_mean), b7=mean(bio7_mean), b12=mean(bio12_mean)) %>% 
   ungroup %>% mutate(tmean=scale(b1), tseas=scale(b7), precip=scale(b12))
+pWP <- read_csv(paste0("data/pWP_", grdSz, ".csv")) %>% 
+  add_blocks(cb.i=cb.i) %>% summarise(mnWP=mean(WP))
 
 # land cover summarized to blocks
 grnt <- read_csv(paste0("data/out_", grdSz, "_grnt.csv")) %>% 
@@ -61,8 +63,8 @@ nlcd <- read_csv(paste0("data/out_",grdSz,"_nlcd.csv"))  %>%
 ```{r modelSetup}
 # small scale runs: set nCell for Y1&Y2 and Y2
 set.seed(2211)
-nFit <- 60
-nNew <- 40
+nFit <- 1200
+nNew <- 800
 n <- sampleCells(nFit, nNew, nrow(grnt))
 
 # Y1 & Y2
