@@ -170,7 +170,6 @@ transformed parameters {
 }
 
 model {
-  
   //covariance priors
   for(j in 1:2) {
     L_Omega[j] ~ lkj_corr_cholesky(8);
@@ -184,7 +183,6 @@ model {
   //beta priors
   beta_p ~ normal(0, 1);
   beta_d ~ normal(0, 0.1);
-  
   
   //likelihood
    Y1 ~ multi_normal_cholesky(nu[1:n1], 

@@ -8,7 +8,7 @@ output: html_document
 library(sevcheck); library(tidyverse); library(magrittr); theme_set(theme_bw())
 library(forcats); library(rstan); library(ggmcmc); library(mvtnorm)
 rstan_options(auto_write = TRUE); options(mc.cores = parallel::detectCores())
-source("code/LC_fun.R")
+source("code/LC_fun.R"); source("code/stan_utilities.R")
 ```
 
 
@@ -30,19 +30,15 @@ cb.i <- read_csv(paste0("data/roads_", grdSz, ".csv")) %>%
 # covariates summarized to blocks
 pop00 <- read_csv(paste0("data/pop00_", grdSz, ".csv")) %>% 
   rename(CellID=category) %>% 
-  add_blocks(cb.i=cb.i) %>% summarise(popTot=sum(sum)) %>% 
-  ungroup %>% mutate(popSc=scale(popTot))
+  add_blocks(cb.i=cb.i) %>% summarise(popTot=sum(sum)) 
 hous00 <- read_csv(paste0("data/housing00_", grdSz, ".csv")) %>% 
   rename(CellID=category) %>% 
-  add_blocks(cb.i=cb.i) %>% summarise(secHome=sum(sum)) %>% 
-  ungroup %>% mutate(secHomeSc=scale(secHome))
+  add_blocks(cb.i=cb.i) %>% summarise(secHome=sum(sum)) 
 rdLen <- read_csv(paste0("data/roads_", grdSz, ".csv")) %>% 
-  add_blocks(cb.i=cb.i) %>% summarise(rdLen=sum(roadLen)) %>% 
-  ungroup %>% mutate(lenSc=scale(rdLen))
+  add_blocks(cb.i=cb.i) %>% summarise(rdLen=sum(roadLen)) 
 clim <- read_csv(paste0("data/clim_", grdSz, ".csv")) %>% 
   add_blocks(cb.i=cb.i) %>%  
-  summarise(b1=mean(bio1_mean), b7=mean(bio7_mean), b12=mean(bio12_mean)) %>% 
-  ungroup %>% mutate(tmean=scale(b1), tseas=scale(b7), precip=scale(b12))
+  summarise(b1=mean(bio1_mean), b7=mean(bio7_mean), b12=mean(bio12_mean)) 
 
 # land cover summarized to blocks
 grnt <- read_csv(paste0("data/out_", grdSz, "_grnt.csv")) %>% 
@@ -61,8 +57,8 @@ nlcd <- read_csv(paste0("data/out_",grdSz,"_nlcd.csv"))  %>%
 ```{r modelSetup}
 # small scale runs: set nCell for Y1&Y2 and Y2
 set.seed(2211)
-nFit <- 60
-nNew <- 40
+nFit <- 30
+nNew <- 20
 n <- sampleCells(nFit, nNew, nrow(grnt))
 
 # Y1 & Y2
@@ -72,14 +68,14 @@ Y2 <- nlcd[n$all,]
 
 # covariates: bias (Dev, Oth, Hwd, Evg, Mxd)
 Xd <- vector("list", 4)
-Xd[[1]] <- cbind(rdLen$lenSc[n$all], hous00$secHomeSc[n$all])#, clim$tmean[n$all])
-Xd[[2]] <- cbind(rdLen$lenSc[n$all], pop00$popSc[n$all])
-Xd[[3]] <- matrix(clim$tseas[n$all], ncol=1)
-Xd[[4]] <- cbind(clim$tmean[n$all], clim$precip[n$all])#, rdLen$lenSc[n$all])
+Xd[[1]] <- cbind(scale(rdLen$rdLen[n$all]), scale(hous00$secHome[n$all]))
+Xd[[2]] <- cbind(scale(rdLen$rdLen[n$all]), scale(pop00$popTot[n$all]))
+Xd[[3]] <- matrix(scale(clim$b7[n$all]), ncol=1)
+Xd[[4]] <- cbind(scale(clim$b1[n$all]), scale(clim$b12[n$all]))
 nBd <- map_int(Xd, ncol)  # nBeta for each covariate
 
 # covariates: WP|Evg
-Xp <- cbind(clim$tmean[n$all], clim$precip[n$all])
+Xp <- cbind(scale(clim$b1[n$all]), scale(clim$b12[n$all]))
 nBp <- ncol(Xp)
 ```
 
@@ -88,10 +84,14 @@ nBp <- ncol(Xp)
 d <- list(n1=nFit, n2=nFit+1, n3=n$tot, L=6, nB_d=nBd, nB_p=nBp,
           Y1=Y1.fit[,-6], Y2=Y2[,-5], 
           X_d1=Xd[[1]], X_d2=Xd[[2]], X_d3=Xd[[3]], X_d4=Xd[[4]], X_p=Xp)
-out <- stan(file="code/LC_mod_uvBeta.stan", data=d, init=0, thin=50, 
-            iter=1000, warmup=700, chains=4, seed=4337, refresh=500,
-            include=FALSE, pars="Y2_ds", "nu",
-            control=list(max_treedepth=20, adapt_delta=0.95, metric="diag_e"))
+out <- stan(file="code/LC_mod_qrBeta.stan", data=d, init=0, thin=10, 
+            iter=10000, warmup=5000, chains=4, seed=4337, refresh=500,
+            include=FALSE, pars=c("Y2_ds", "nu"),
+            control=list(max_treedepth=25, adapt_delta=0.8, metric="diag_e"))
+check_treedepth(out); check_energy(out); check_div(out)
+sampler_params <- get_sampler_params(out, inc_warmup=FALSE)
+n_gradients <- sapply(sampler_params, function(x) sum(x[,'n_leapfrog__']))
+n_gradients; sum(n_gradients)
 ```
 
 
