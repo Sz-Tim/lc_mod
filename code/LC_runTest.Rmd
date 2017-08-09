@@ -60,8 +60,8 @@ nlcd <- read_csv(paste0("data/out_",grdSz,"_nlcd.csv"))  %>%
 ```{r modelSetup}
 # small scale runs: set nCell for Y1&Y2 and Y2
 set.seed(2211)
-nFit <- 150
-nNew <- 100
+nFit <- 30
+nNew <- 20
 n <- sampleCells(nFit, nNew, nrow(grnt))
 
 # Y1 & Y2
@@ -88,8 +88,8 @@ d <- list(n1=nFit, n2=nFit+1, n3=n$tot, L=6, nB_d=nBd, nB_p=nBp,
           Y1=Y1.fit[,-6], Y2=Y2[,-5], 
           X_d1=Xd[[1]], X_d2=Xd[[2]], X_d3=Xd[[3]], X_d4=Xd[[4]], X_p=Xp)
 out <- stan(file="code/LC_mod_qr_d.stan", data=d, init=0, thin=50, 
-            iter=5000, warmup=2000, chains=2, seed=4337, refresh=500,
-            include=FALSE, pars=c("Y2_ds", "nu"),
+            iter=2000, warmup=1000, chains=4, seed=4337, refresh=100,
+            include=FALSE, pars=c("nu_ds", "nu"),
             control=list(max_treedepth=30, adapt_delta=0.95, metric="diag_e"))
 check_treedepth(out); check_energy(out); check_div(out)
 sampler_params <- get_sampler_params(out, inc_warmup=FALSE)
@@ -181,14 +181,19 @@ stan_ess(out)
 stan_diag(out)
 stan_rhat(out)
 ggs_crosscorrelation(gg.b)
-samp.out <- cbind(energies[,c(1,6)], extract(out, pars="lp__")[[1]], 
-                  extract(out, pars="L_sigma_unif")[[1]][,1,],
-                  extract(out, pars="L_sigma_unif")[[1]][,2,])
+sampler_params <- get_sampler_params(out, inc_warmup=FALSE) %>% do.call(rbind, .)
+samp.out <- cbind(sampler_params[,c(1,6)], extract(out, pars="lp__")[[1]], 
+                  extract(out, pars="L_sigma_unif_Y1")[[1]],
+                  extract(out, pars="L_sigma_unif_Y2")[[1]])
 colnames(samp.out) <- c("accept_stat__", "energy__", "lp__", 
-                        "L_sig[1,1]", "L_sig[1,2]", "L_sig[1,3]", 
-                        "L_sig[1,4]", "L_sig[1,5]", 
-                        "L_sig[2,1]", "L_sig[2,2]", "L_sig[2,3]", 
-                        "L_sig[2,4]", "L_sig[2,5]")
+                        "L_sig1[1]", "L_sig1[2]", "L_sig1[3]", 
+                        "L_sig1[4]", "L_sig1[5]", 
+                        "L_sig2[1]", "L_sig2[2]", "L_sig2[3]", "L_sig2[4]")
+pairs(samp.out, diag.panel=panel.hist, lower.panel=panel.cor,
+      upper.panel=function(...) smoothScatter(...,nrpoints=0, add=TRUE))
+samp.out <- cbind(sampler_params[,c(1,6)], extract(out, pars="lp__")[[1]], 
+                  extract(out, pars="beta_d")[[1]],
+                  extract(out, pars="beta_p")[[1]])
 pairs(samp.out, diag.panel=panel.hist, lower.panel=panel.cor,
       upper.panel=function(...) smoothScatter(...,nrpoints=0, add=TRUE))
 shinystan::launch_shinystan(out)
