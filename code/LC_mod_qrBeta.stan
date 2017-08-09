@@ -54,57 +54,31 @@ data {
   matrix[n3,nB_d[4]] X_d4;  //bias covariates: Evg
 }
 transformed data {
-  int n_beta_d;  //total number of beta_ds
+  int n_beta_d = sum(nB_d);  //total number of beta_ds
   // indexes for bias betas
-  int d1_2;  //last d1 beta
-  int d2_1;  //first d2 beta
-  int d2_2;  //last d2 beta
-  int d3_1;  //first d3 beta
-  int d3_2;  //last d3 beta
-  int d4_1;  //first d4 beta
-  int d4_2;  //last d4 beta
+  int d1_2 = nB_d[1];         //last d1 beta
+  int d2_1 = d1_2 + 1;        //first d2 beta
+  int d2_2 = d1_2 + nB_d[2];  //last d2 beta
+  int d3_1 = d2_2 + 1;        //first d3 beta
+  int d3_2 = d2_2 + nB_d[3];  //last d3 beta
+  int d4_1 = d3_2 + 1;        //first d4 beta
+  int d4_2 = d3_2 + nB_d[4];  //last d4 beta
   //QR decomposition for covariates
-  matrix[n3,nB_p] Q_p;
-  matrix[nB_p,nB_p] R_p;
-  matrix[nB_p,nB_p] R_inv_p;
-  matrix[n3,nB_d[1]] Q_d1;
-  matrix[nB_d[1],nB_d[1]] R_d1;
-  matrix[nB_d[1],nB_d[1]] R_inv_d1;
-  matrix[n3,nB_d[2]] Q_d2;
-  matrix[nB_d[2],nB_d[2]] R_d2;
-  matrix[nB_d[2],nB_d[2]] R_inv_d2;
-  matrix[n3,nB_d[3]] Q_d3;
-  matrix[nB_d[3],nB_d[3]] R_d3;
-  matrix[nB_d[3],nB_d[3]] R_inv_d3;
-  matrix[n3,nB_d[4]] Q_d4;
-  matrix[nB_d[4],nB_d[4]] R_d4;
-  matrix[nB_d[4],nB_d[4]] R_inv_d4;
-  
-  //indexes
-  n_beta_d = sum(nB_d);
-  d1_2 = nB_d[1];
-  d2_1 = d1_2 + 1;
-  d2_2 = d1_2 + nB_d[2];
-  d3_1 = d2_2 + 1;
-  d3_2 = d2_2 + nB_d[3];
-  d4_1 = d3_2 + 1;
-  d4_2 = d3_2 + nB_d[4];
-  //thin and scale the QR decomposition
-  Q_p = qr_Q(X_p)[,1:nB_p] * sqrt(n3-1);
-  R_p = qr_R(X_p)[1:nB_p,] / sqrt(n3-1);
-  R_inv_p = inverse(R_p);
-  Q_d1 = qr_Q(X_d1)[,1:nB_d[1]] * sqrt(n3-1);
-  R_d1 = qr_R(X_d1)[1:nB_d[1],] / sqrt(n3-1);
-  R_inv_d1 = inverse(R_d1);
-  Q_d2 = qr_Q(X_d2)[,1:nB_d[2]] * sqrt(n3-1);
-  R_d2 = qr_R(X_d2)[1:nB_d[2],] / sqrt(n3-1);
-  R_inv_d2 = inverse(R_d2);
-  Q_d3 = qr_Q(X_d3)[,1:nB_d[3]] * sqrt(n3-1);
-  R_d3 = qr_R(X_d3)[1:nB_d[3],] / sqrt(n3-1);
-  R_inv_d3 = inverse(R_d3);
-  Q_d4 = qr_Q(X_d4)[,1:nB_d[4]] * sqrt(n3-1);
-  R_d4 = qr_R(X_d4)[1:nB_d[4],] / sqrt(n3-1);
-  R_inv_d4 = inverse(R_d4);
+  matrix[n3,nB_p] Q_p = qr_Q(X_p)[,1:nB_p] * sqrt(n3-1);
+  matrix[nB_p,nB_p] R_p = qr_R(X_p)[1:nB_p,] / sqrt(n3-1);
+  matrix[nB_p,nB_p] R_inv_p = inverse(R_p);
+  matrix[n3,nB_d[1]] Q_d1 = qr_Q(X_d1)[,1:nB_d[1]] * sqrt(n3-1);
+  matrix[nB_d[1],nB_d[1]] R_d1 = qr_R(X_d1)[1:nB_d[1],] / sqrt(n3-1);
+  matrix[nB_d[1],nB_d[1]] R_inv_d1 = inverse(R_d1);
+  matrix[n3,nB_d[2]] Q_d2 = qr_Q(X_d2)[,1:nB_d[2]] * sqrt(n3-1);
+  matrix[nB_d[2],nB_d[2]] R_d2 = qr_R(X_d2)[1:nB_d[2],] / sqrt(n3-1);
+  matrix[nB_d[2],nB_d[2]] R_inv_d2 = inverse(R_d2);
+  matrix[n3,nB_d[3]] Q_d3 = qr_Q(X_d3)[,1:nB_d[3]] * sqrt(n3-1);
+  matrix[nB_d[3],nB_d[3]] R_d3 = qr_R(X_d3)[1:nB_d[3],] / sqrt(n3-1);
+  matrix[nB_d[3],nB_d[3]] R_inv_d3 = inverse(R_d3);
+  matrix[n3,nB_d[4]] Q_d4 = qr_Q(X_d4)[,1:nB_d[4]] * sqrt(n3-1);
+  matrix[nB_d[4],nB_d[4]] R_d4 = qr_R(X_d4)[1:nB_d[4],] / sqrt(n3-1);
+  matrix[nB_d[4],nB_d[4]] R_inv_d4 = inverse(R_d4);
 }
 
 parameters {
