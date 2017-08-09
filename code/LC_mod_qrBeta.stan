@@ -136,17 +136,12 @@ transformed parameters {
   
   //correct bias & split WP to [,4] and Evg to [,5]
   ////fit betas using cells with Y1 & Y2
-  Y2_ds[1:n1,1] = to_array_1d(Y2[1:n1,1] 
-      + (Q_d1[1:n1,] * theta_d[1:d1_2]));
-  Y2_ds[1:n1,2] = to_array_1d(Y2[1:n1,2] 
-      + (Q_d2[1:n1,] * theta_d[d2_1:d2_2]));
-  Y2_ds[1:n1,3] = to_array_1d(Y2[1:n1,3] 
-      + (Q_d3[1:n1,] * theta_d[d3_1:d3_2]));
-  Y2_ds[1:n1,4] = to_array_1d((Y2[1:n1,4] 
-      + (Q_d4[1:n1,] * theta_d[d4_1:d4_2])) 
+  Y2_ds[1:n1,1] = to_array_1d(Y2[1:n1,1] + (Q_d1[1:n1,] * theta_d[1:d1_2]));
+  Y2_ds[1:n1,2] = to_array_1d(Y2[1:n1,2] + (Q_d2[1:n1,] * theta_d[d2_1:d2_2]));
+  Y2_ds[1:n1,3] = to_array_1d(Y2[1:n1,3] + (Q_d3[1:n1,] * theta_d[d3_1:d3_2]));
+  Y2_ds[1:n1,4] = to_array_1d((Y2[1:n1,4] + (Q_d4[1:n1,] * theta_d[d4_1:d4_2])) 
       .* inv_logit(Q_p[1:n1,] * theta_p));
-  Y2_ds[1:n1,5] = to_array_1d((Y2[1:n1,4] 
-      + (Q_d4[1:n1,] * theta_d[d4_1:d4_2])) 
+  Y2_ds[1:n1,5] = to_array_1d((Y2[1:n1,4] + (Q_d4[1:n1,] * theta_d[d4_1:d4_2])) 
       .* (1-inv_logit(Q_p[1:n1,] * theta_p)));
   ////correct for bias in cells with only Y2 using fit betas
   {
@@ -154,17 +149,12 @@ transformed parameters {
     vector[nB_p] b_p;
     b_d = theta_d;
     b_p = theta_p;
-    Y2_ds[n2:n3,1] = to_array_1d(Y2[n2:n3,1] 
-        + (Q_d1[n2:n3,] * b_d[1:d1_2]));
-    Y2_ds[n2:n3,2] = to_array_1d(Y2[n2:n3,2] 
-        + (Q_d2[n2:n3,] * b_d[d2_1:d2_2]));
-    Y2_ds[n2:n3,3] = to_array_1d(Y2[n2:n3,3] 
-        + (Q_d3[n2:n3,] * b_d[d3_1:d3_2]));
-    Y2_ds[n2:n3,4] = to_array_1d((Y2[n2:n3,4] 
-        + (Q_d4[n2:n3,] * b_d[d4_1:d4_2])) 
+    Y2_ds[n2:n3,1] = to_array_1d(Y2[n2:n3,1] + (Q_d1[n2:n3,] * b_d[1:d1_2]));
+    Y2_ds[n2:n3,2] = to_array_1d(Y2[n2:n3,2] + (Q_d2[n2:n3,] * b_d[d2_1:d2_2]));
+    Y2_ds[n2:n3,3] = to_array_1d(Y2[n2:n3,3] + (Q_d3[n2:n3,] * b_d[d3_1:d3_2]));
+    Y2_ds[n2:n3,4] = to_array_1d((Y2[n2:n3,4] + (Q_d4[n2:n3,] * b_d[d4_1:d4_2])) 
         .* inv_logit(Q_p[n2:n3,] * theta_p));
-    Y2_ds[n2:n3,5] = to_array_1d((Y2[n2:n3,4] 
-        + (X_d4[n2:n3,] * b_d[d4_1:d4_2])) 
+    Y2_ds[n2:n3,5] = to_array_1d((Y2[n2:n3,4] + (X_d4[n2:n3,] * b_d[d4_1:d4_2])) 
         .* (1-inv_logit(Q_p[n2:n3,] * theta_p)));
   }
 }
@@ -189,13 +179,13 @@ model {
                 diag_pre_multiply(2.5 * tan(L_sigma_unif[1]), L_Omega[1]));
    Y2_ds ~ multi_normal_cholesky(nu,
                 diag_pre_multiply(2.5 * tan(L_sigma_unif[2]), L_Omega[2]));
+   target += log_inv_logit(theta_p);
+   target += log1m_inv_logit(theta_p);
 }
 
 generated quantities {
   //landcover: latent compositional
   simplex[L] n_eta[n3];  //gjam transformed nu
-    
-  //nu to eta
   for(n in 1:(n3)) {
     n_eta[n] = tr_gjam_inv(nu[n]);
   }
