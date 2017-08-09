@@ -45,12 +45,6 @@ parameters {
   vector<lower=0>[L] L_sigma[2];
   row_vector[L] nu[N];
 }
-transformed parameters {
-  simplex[L] eta[N];
-  for(n in 1:N) {
-    eta[n] = tr_gjam_inv(nu[n])';
-  }
-}
 model {
   //priors
   matrix[L,L] L_Sigma[2];
@@ -63,4 +57,10 @@ model {
   //likelihood
    Y1 ~ multi_normal_cholesky(nu, L_Sigma[1]);
    Y2 ~ multi_normal_cholesky(nu, L_Sigma[2]);
+}
+generated quantities {
+  simplex[L] eta[N];
+  for(n in 1:N) {
+    eta[n] = tr_gjam_inv(nu[n])';
+  }
 }
