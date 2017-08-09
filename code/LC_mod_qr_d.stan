@@ -100,6 +100,9 @@ transformed parameters {
   vector[n3] nu_p;
   //betas
   vector<lower=0, upper=1>[n3] phi;
+  vector<lower=0.0000001>[n3] lambda;
+  vector<lower=0>[n3] p_alpha;
+  vector<lower=0>[n3] p_beta;
   vector[nB_p] beta_p;
   vector[n_beta_d] beta_d;
 
@@ -111,7 +114,6 @@ transformed parameters {
   beta_d[d3_1:d3_2] = R_inv_d3 * theta_d[d3_1:d3_2];
   beta_d[d4_1:d4_2] = R_inv_d4 * theta_d[d4_1:d4_2];
   
-  phi = to_vector(nu[,4]) ./ (to_vector(nu[,4]) + to_vector(nu[,5]));
   
   //estimate bias & lump WP [,4] and Evg [,5]
   ////fit betas using cells with Y1 & Y2
@@ -140,6 +142,11 @@ transformed parameters {
     nu_ds[n2:n3,4] = to_array_1d(to_vector(nu[n2:n3,4]) + to_vector(nu[n2:n3,5])
         + (Q_d4[n2:n3,] * b_d[d4_1:d4_2]));
   }
+  
+  lambda = to_vector(nu[,4]) + to_vector(nu[,5]);
+  phi = to_vector(nu[,4]) ./ lambda;
+  p_alpha = lambda .* nu_p;
+  p_beta = lambda .* (1 - nu_p);
 }
 
 model {
@@ -157,7 +164,7 @@ model {
   beta_d ~ normal(0, 0.1);
   
   //pWP
-  // nu_p ~ normal(phi, 0.1);
+  phi ~ beta(p_alpha, p_beta);
   
   //likelihood
    Y1 ~ multi_normal_cholesky(nu[1:n1], 
