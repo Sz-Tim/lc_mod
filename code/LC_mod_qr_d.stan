@@ -97,12 +97,10 @@ parameters {
 transformed parameters {
   //NLCD de-biasing and splitting
   vector[L-2] nu_ds[n3];
-  vector[n3] nu_p;
+  // vector[n3] nu_pX;
   //betas
-  vector<lower=0, upper=1>[n3] phi;
-  vector<lower=0.0000001>[n3] lambda;
-  vector<lower=0>[n3] p_alpha;
-  vector<lower=0>[n3] p_beta;
+  // vector<lower=0, upper=1>[n3] p_mu;
+  // vector<lower=0.0000001>[n3] p_lambda;
   vector[nB_p] beta_p;
   vector[n_beta_d] beta_d;
 
@@ -114,39 +112,44 @@ transformed parameters {
   beta_d[d3_1:d3_2] = R_inv_d3 * theta_d[d3_1:d3_2];
   beta_d[d4_1:d4_2] = R_inv_d4 * theta_d[d4_1:d4_2];
   
+  //pWP: 
+  // p_lambda = to_vector(nu[,4]) + to_vector(nu[,5]);
+  // p_mu = to_vector(nu[,4]) ./ p_lambda;
   
   //estimate bias & lump WP [,4] and Evg [,5]
   ////fit betas using cells with Y1 & Y2
-  nu_p[1:n1] = inv_logit(Q_p[1:n1,] * theta_p);
+  // nu_pX[1:n1] = inv_logit(Q_p[1:n1,] * theta_p);
   nu_ds[1:n1,1] = to_array_1d(to_vector(nu[1:n1,1]) 
         + (Q_d1[1:n1,] * theta_d[1:d1_2]));
   nu_ds[1:n1,2] = to_array_1d(to_vector(nu[1:n1,2])
         + (Q_d2[1:n1,] * theta_d[d2_1:d2_2]));
   nu_ds[1:n1,3] = to_array_1d(to_vector(nu[1:n1,3]) 
         + (Q_d3[1:n1,] * theta_d[d3_1:d3_2]));
-  nu_ds[1:n1,4] = to_array_1d(to_vector(nu[1:n1,4]) + to_vector(nu[1:n1,5])
+  nu_ds[1:n1,4] = to_array_1d(to_vector(nu[1:n1,4]) 
+        ./ inv_logit(Q_p[1:n1,] * theta_p)
         + (Q_d4[1:n1,] * theta_d[d4_1:d4_2]));
+  // nu_ds[1:n1,4] = to_array_1d(to_vector(nu[1:n1,4]) + to_vector(nu[1:n1,5])
+        // + (Q_d4[1:n1,] * theta_d[d4_1:d4_2]));
   ////estimate bias in cells with only Y2 using fit betas
   {
     vector[nB_p] b_p;
     vector[n_beta_d] b_d;
-    b_d = theta_d;
     b_p = theta_p;
-    nu_p[n2:n3] = inv_logit(Q_p[n2:n3,] * b_p);
+    b_d = theta_d;
+    // nu_pX[n2:n3] = inv_logit(Q_p[n2:n3,] * b_p);
     nu_ds[n2:n3,1] = to_array_1d(to_vector(nu[n2:n3,1])
           + (Q_d1[n2:n3,] * b_d[1:d1_2]));
     nu_ds[n2:n3,2] = to_array_1d(to_vector(nu[n2:n3,2])
           + (Q_d2[n2:n3,] * b_d[d2_1:d2_2]));
     nu_ds[n2:n3,3] = to_array_1d(to_vector(nu[n2:n3,3])
           + (Q_d3[n2:n3,] * b_d[d3_1:d3_2]));
-    nu_ds[n2:n3,4] = to_array_1d(to_vector(nu[n2:n3,4]) + to_vector(nu[n2:n3,5])
+    nu_ds[n2:n3,4] = to_array_1d(to_vector(nu[n2:n3,4])
+        ./ inv_logit(Q_p[n2:n3,] * b_p)
         + (Q_d4[n2:n3,] * b_d[d4_1:d4_2]));
+    // NEED TO ADD SOMETHING TO INFORM nu[,5]!!
+    // nu_ds[n2:n3,4] = to_array_1d(to_vector(nu[n2:n3,4]) + to_vector(nu[n2:n3,5])
+        // + (Q_d4[n2:n3,] * b_d[d4_1:d4_2]));
   }
-  
-  lambda = to_vector(nu[,4]) + to_vector(nu[,5]);
-  phi = to_vector(nu[,4]) ./ lambda;
-  p_alpha = lambda .* nu_p;
-  p_beta = lambda .* (1 - nu_p);
 }
 
 model {
@@ -164,7 +167,7 @@ model {
   beta_d ~ normal(0, 0.1);
   
   //pWP
-  phi ~ beta(p_alpha, p_beta);
+  // p_mu ~ beta((p_lambda .* nu_pX), (p_lambda .* (1 - nu_pX)));
   
   //likelihood
    Y1 ~ multi_normal_cholesky(nu[1:n1], 
