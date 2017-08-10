@@ -30,12 +30,12 @@ cb.i <- read_csv(paste0("data/roads_", grdSz, ".csv")) %>%
 # covariates summarized to blocks
 pop00 <- read_csv(paste0("data/pop00_", grdSz, ".csv")) %>% 
   rename(CellID=category) %>% 
-  add_blocks(cb.i=cb.i) %>% summarise(popTot=sum(sum)) 
+  add_blocks(cb.i=cb.i) %>% summarise(popTot=log(sum(sum)+0.001))
 hous00 <- read_csv(paste0("data/housing00_", grdSz, ".csv")) %>% 
   rename(CellID=category) %>% 
-  add_blocks(cb.i=cb.i) %>% summarise(secHome=sum(sum)) 
+  add_blocks(cb.i=cb.i) %>% summarise(secHome=log(sum(sum)+0.001))
 rdLen <- read_csv(paste0("data/roads_", grdSz, ".csv")) %>% 
-  add_blocks(cb.i=cb.i) %>% summarise(rdLen=sum(roadLen)) 
+  add_blocks(cb.i=cb.i) %>% summarise(rdLen=log(sum(roadLen)+0.001)) 
 clim <- read_csv(paste0("data/clim_", grdSz, ".csv")) %>% 
   add_blocks(cb.i=cb.i) %>% 
   summarise(b1=mean(bio1_mean), b7=mean(bio7_mean), b12=mean(bio12_mean))
@@ -59,9 +59,9 @@ nlcd <- read_csv(paste0("data/out_",grdSz,"_nlcd.csv"))  %>%
 
 ```{r modelSetup}
 # small scale runs: set nCell for Y1&Y2 and Y2
-set.seed(2211)
-nFit <- 30
-nNew <- 20
+set.seed(2221)
+nFit <- 60
+nNew <- 40
 n <- sampleCells(nFit, nNew, nrow(grnt))
 
 # Y1 & Y2
@@ -71,15 +71,40 @@ Y2 <- nlcd[n$all,]
 
 # covariates: bias (Dev, Oth, Hwd, Evg, Mxd)
 Xd <- vector("list", 4)
-Xd[[1]] <- cbind(scale(rdLen$rdLen[n$all]), scale(hous00$secHome[n$all]))
-Xd[[2]] <- cbind(scale(rdLen$rdLen[n$all]), scale(pop00$popTot[n$all]))
-Xd[[3]] <- matrix(scale(clim$b7[n$all]), ncol=1)
-Xd[[4]] <- cbind(scale(clim$b1[n$all]), scale(clim$b12[n$all]))
+Xd[[1]] <- cbind(scale(rdLen$rdLen[n$all]), 
+                 scale(pop00$popTot[n$all]),
+                 scale(clim$b1[n$all]))
+Xd[[2]] <- cbind(scale(rdLen$rdLen[n$all]), 
+                 scale(pop00$popTot[n$all]),
+                 scale(clim$b7[n$all]))
+Xd[[3]] <- cbind(scale(pop00$popTot[n$all]),
+                 scale(clim$b7[n$all]))
+Xd[[4]] <- cbind(scale(clim$b1[n$all]), 
+                 scale(clim$b12[n$all]),
+                 scale(hous00$secHome[n$all]))
 nBd <- map_int(Xd, ncol)  # nBeta for each covariate
 
 # covariates: WP|Evg
-Xp <- cbind(scale(pWP$mnWP[n$all]), scale(clim$b1[n$all]), scale(clim$b12[n$all]))
+Xp <- cbind(scale(pWP$mnWP[n$all]), 
+            scale(clim$b1[n$all]), 
+            scale(clim$b12[n$all]),
+            scale(rdLen$rdLen[n$all]),
+            scale(pop00$popTot[n$all]))
 nBp <- ncol(Xp)
+
+Yd <- tibble(d1=c(scale(grnt[,1]-nlcd[,1])),
+             d2=c(scale(grnt[,2]-nlcd[,2])),
+             d3=c(scale(grnt[,3]-nlcd[,3])),
+             d4=c(scale((grnt[,4] + grnt[,5])-nlcd[,4])),
+             nuWP=c(scale((grnt[,4]+0.0001)/(grnt[,4] + grnt[,5] + 0.0001))),
+             valWP=c(scale(pWP$mnWP)),
+             rdLen=c(scale(rdLen$rdLen)),
+             pop00=c(scale(pop00$popTot)),
+             hous00=c(scale(hous00$secHome)),
+             tmean=c(scale(clim$b1)),
+             tseas=c(scale(clim$b7)),
+             precip=c(scale(clim$b12)))
+cor(Yd)
 ```
 
 
@@ -88,8 +113,8 @@ d <- list(n1=nFit, n2=nFit+1, n3=n$tot, L=6, nB_d=nBd, nB_p=nBp,
           Y1=Y1.fit[,-6], Y2=Y2[,-5], 
           X_d1=Xd[[1]], X_d2=Xd[[2]], X_d3=Xd[[3]], X_d4=Xd[[4]], X_p=Xp)
 out <- stan(file="code/LC_mod_qr_d.stan", data=d, init=0, thin=50, 
-            iter=2000, warmup=1000, chains=4, seed=4337, refresh=100,
-            include=FALSE, pars=c("nu_ds", "nu"),
+            iter=10000, warmup=6000, chains=4, seed=433337, refresh=500,
+            include=FALSE, pars=c("nu_Y1", "nu_Y2", "pX"),
             control=list(max_treedepth=30, adapt_delta=0.95, metric="diag_e"))
 check_treedepth(out); check_energy(out); check_div(out)
 sampler_params <- get_sampler_params(out, inc_warmup=FALSE)
