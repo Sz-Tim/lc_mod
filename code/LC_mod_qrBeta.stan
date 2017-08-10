@@ -153,8 +153,6 @@ model {
                 diag_pre_multiply(2.5 * tan(L_sigma_unif[1]), L_Omega[1]));
    Y2_ds ~ multi_normal_cholesky(nu,
                 diag_pre_multiply(2.5 * tan(L_sigma_unif[2]), L_Omega[2]));
-   target += log_inv_logit(theta_p);
-   target += log1m_inv_logit(theta_p);
 }
 
 generated quantities {
