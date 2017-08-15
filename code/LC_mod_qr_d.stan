@@ -53,6 +53,7 @@ data {
   matrix[n3,nB_d[3]] X_d3;  //bias covariates: Hwd
   matrix[n3,nB_d[4]] X_d4;  //bias covariates: Evg
 }
+
 transformed data {
   int n_beta_d = sum(nB_d);  //total number of beta_ds
   // indexes for bias betas
@@ -98,6 +99,7 @@ transformed parameters {
   //NLCD de-biasing and splitting
   vector[L-1] nu_Y1[n3];
   vector[n3] pX;
+  vector[n3] nu4_d;
   //betas
   vector[nB_p] beta_p;
   vector[n_beta_d] beta_d;
@@ -114,23 +116,15 @@ transformed parameters {
   //estimate bias & split WP [,4] and Evg [,5]
   ////fit betas using cells with Y1 & Y2
   pX[1:n1] = inv_logit(Q_p[1:n1,] * theta_p);
-  nu_Y1[1:n1,1] = to_array_1d(
-        to_vector(nu_Y2[1:n1,1]) 
+  nu4_d[1:n1] = to_vector(nu_Y2[1:n1,4]) + (Q_d4[1:n1,] * theta_d[d4_1:d4_2]);
+  nu_Y1[1:n1,1] = to_array_1d(to_vector(nu_Y2[1:n1,1]) 
         + (Q_d1[1:n1,] * theta_d[1:d1_2]));
-  nu_Y1[1:n1,2] = to_array_1d(
-        to_vector(nu_Y2[1:n1,2])
+  nu_Y1[1:n1,2] = to_array_1d(to_vector(nu_Y2[1:n1,2])
         + (Q_d2[1:n1,] * theta_d[d2_1:d2_2]));
-  nu_Y1[1:n1,3] = to_array_1d(
-        to_vector(nu_Y2[1:n1,3]) 
+  nu_Y1[1:n1,3] = to_array_1d(to_vector(nu_Y2[1:n1,3]) 
         + (Q_d3[1:n1,] * theta_d[d3_1:d3_2]));
-  nu_Y1[1:n1,4] = to_array_1d(
-        (to_vector(nu_Y2[1:n1,4]) 
-            + (Q_d4[1:n1,] * theta_d[d4_1:d4_2])) 
-        ./ pX[1:n1]);
-  nu_Y1[1:n1,5] = to_array_1d(
-        (to_vector(nu_Y2[1:n1,4])
-            + (Q_d4[1:n1,] * theta_d[d4_1:d4_2])) 
-        ./ (1 - pX[1:n1]));
+  nu_Y1[1:n1,4] = to_array_1d(nu4_d[1:n1] ./ pX[1:n1]);
+  nu_Y1[1:n1,5] = to_array_1d(nu4_d[1:n1] ./ (1 - pX[1:n1]));
   ////predict bias in cells with only Y2 using fit betas
   {
     vector[nB_p] b_p;
@@ -138,23 +132,15 @@ transformed parameters {
     b_p = theta_p;
     b_d = theta_d;
     pX[n2:n3] = inv_logit(Q_p[n2:n3,] * b_p);
-    nu_Y1[n2:n3,1] = to_array_1d(
-          to_vector(nu_Y2[n2:n3,1])
+    nu4_d[n2:n3] = to_vector(nu_Y2[n2:n3,4]) + (Q_d4[n2:n3,] * b_d[d4_1:d4_2]);
+    nu_Y1[n2:n3,1] = to_array_1d(to_vector(nu_Y2[n2:n3,1])
           + (Q_d1[n2:n3,] * b_d[1:d1_2]));
-    nu_Y1[n2:n3,2] = to_array_1d(
-          to_vector(nu_Y2[n2:n3,2])
+    nu_Y1[n2:n3,2] = to_array_1d(to_vector(nu_Y2[n2:n3,2])
           + (Q_d2[n2:n3,] * b_d[d2_1:d2_2]));
-    nu_Y1[n2:n3,3] = to_array_1d(
-          to_vector(nu_Y2[n2:n3,3])
+    nu_Y1[n2:n3,3] = to_array_1d(to_vector(nu_Y2[n2:n3,3])
           + (Q_d3[n2:n3,] * b_d[d3_1:d3_2]));
-    nu_Y1[n2:n3,4] = to_array_1d(
-          (to_vector(nu_Y2[n2:n3,4]) 
-              + (Q_d4[n2:n3,] * b_d[d4_1:d4_2])) 
-          ./ pX[n2:n3]);
-    nu_Y1[n2:n3,5] = to_array_1d(
-          (to_vector(nu_Y2[n2:n3,4])
-              + (Q_d4[n2:n3,] * b_d[d4_1:d4_2])) 
-          ./ (1 - pX[n2:n3]));
+    nu_Y1[n2:n3,4] = to_array_1d(nu4_d[n2:n3] ./ pX[n2:n3]);
+    nu_Y1[n2:n3,5] = to_array_1d(nu4_d[n2:n3] ./ (1 - pX[n2:n3]));
   }
 }
 
