@@ -37,9 +37,9 @@ functions {
 
 data {
   //counts and indices
-  int n1;  //number of cells for GRANIT
+  int n1;  //number of cells with Y1 & Y2
   int n2;  //n1 + 1 (for indexing)
-  int n3;  //number of cells for NLCD + covariates
+  int n3;  //number of cells with only Y2
   int L;  //number of land cover classes
   int nB_d[L-2];  //number of bias covariates for each LC
   int nB_p;  //number of covariates for pr(WP|Evg)
@@ -83,21 +83,21 @@ transformed data {
 
 parameters {
   //landcover: covariance
-  cholesky_factor_corr[L-1] L_Omega[2]; //covariance matrix for Y1 & Y2
-  vector<lower=0, upper=pi()/2>[L-1] L_sigma_unif[2];  //covariance
-  //landcover: latent non-constrained
-  vector<lower=-1, upper=2>[L-1] nu[n1];  //latent LC proportions
-  //betas
-  vector[nB_p] theta_p;  //pr(WP|Evg) betas
-  vector[n_beta_d] theta_d;  //bias betas
+  cholesky_factor_corr[L-1] L_Omega[2];
+  vector<lower=0, upper=pi()/2>[L-1] L_sigma_unif[2];
+  //landcover: latent not constrained to be compositional
+  vector[L-1] nu[n1];
+  //thetas: QR decomposition slopes
+  vector[nB_p] theta_p;  //pr(WP|Evg) thetas
+  vector[n_beta_d] theta_d;  //bias thetas
 }
 
 transformed parameters {
   //NLCD de-biasing and splitting
-  vector[L-1] Y2_ds[n1];  //unbiased, split NLCD
+  vector[L-1] Y2_ds[n1];  
   //betas
-  vector[nB_p] beta_p;
-  vector[n_beta_d] beta_d;
+  vector[nB_p] beta_p;  //pr(WP|Evg) betas
+  vector[n_beta_d] beta_d;  //bias betas
 
   
   //QR decopmositions
@@ -127,7 +127,7 @@ model {
  
   //nu priors
   for(l in 1:(L-1)) {
-    nu[,l] ~ uniform(-1, 2);
+    nu[,l] ~ normal(0.5, 1);
   }
   
   //beta priors
