@@ -14,7 +14,7 @@ source("code/LC_fun.R"); source("code/stan_utilities.R")
 
 ```{r readData, message=FALSE}
 grdSz <- "01_1a"
-blockSize <- 10  # block = (blockSize x blockSize) grid cells
+blockSize <- 50  # block = (blockSize x blockSize) grid cells
 
 # cell-block reference tibble
 cb.i <- read_csv(paste0("data/roads_", grdSz, ".csv")) %>% 
@@ -39,6 +39,9 @@ rdLen <- read_csv(paste0("data/roads_", grdSz, ".csv")) %>%
 clim <- read_csv(paste0("data/clim_", grdSz, ".csv")) %>% 
   add_blocks(cb.i=cb.i) %>% 
   summarise(b1=mean(bio1_mean), b7=mean(bio7_mean), b12=mean(bio12_mean))
+topo <- read_csv(paste0("data/topo_", grdSz, ".csv")) %>% 
+  add_blocks(cb.i=cb.i) %>% 
+  summarise(el=mean(el_mean), rugg=mean(rugg_mean))
 pWP <- read_csv(paste0("data/pWP_", grdSz, ".csv")) %>% 
   rename(CellID=category) %>%
   add_blocks(cb.i=cb.i) %>% summarise(mnWP=mean(mean)/100)
@@ -59,9 +62,9 @@ nlcd <- read_csv(paste0("data/out_",grdSz,"_nlcd.csv"))  %>%
 
 ```{r modelSetup}
 # small scale runs: set nCell for Y1&Y2 and Y2
-set.seed(2221)
+set.seed(2222)
 nFit <- 60
-nNew <- 40
+nNew <- 20
 n <- sampleCells(nFit, nNew, nrow(grnt))
 
 # Y1 & Y2
@@ -73,23 +76,23 @@ Y2 <- nlcd[n$all,]
 Xd <- vector("list", 4)
 Xd[[1]] <- cbind(scale(rdLen$rdLen[n$all]), 
                  scale(pop00$popTot[n$all]),
-                 scale(clim$b1[n$all]))
+                 scale(topo$el[n$all]))
 Xd[[2]] <- cbind(scale(rdLen$rdLen[n$all]), 
                  scale(pop00$popTot[n$all]),
                  scale(clim$b7[n$all]))
-Xd[[3]] <- cbind(scale(pop00$popTot[n$all]),
-                 scale(clim$b7[n$all]))
+Xd[[3]] <- cbind(scale(clim$b7[n$all]), 
+                 scale(pop00$popTot[n$all]), 
+                 scale(topo$el[n$all]))
 Xd[[4]] <- cbind(scale(clim$b1[n$all]), 
                  scale(clim$b12[n$all]),
-                 scale(hous00$secHome[n$all]))
+                 scale(pop00$popTot[n$all]))
 nBd <- map_int(Xd, ncol)  # nBeta for each covariate
 
 # covariates: WP|Evg
 Xp <- cbind(scale(pWP$mnWP[n$all]), 
-            scale(clim$b1[n$all]), 
-            scale(clim$b12[n$all]),
-            scale(rdLen$rdLen[n$all]),
-            scale(pop00$popTot[n$all]))
+            scale(clim$b1[n$all]),
+            scale(pop00$popTot[n$all]),
+            scale(topo$rugg[n$all]))
 nBp <- ncol(Xp)
 
 Yd <- tibble(d1=c(scale(grnt[,1]-nlcd[,1])),
@@ -103,19 +106,30 @@ Yd <- tibble(d1=c(scale(grnt[,1]-nlcd[,1])),
              hous00=c(scale(hous00$secHome)),
              tmean=c(scale(clim$b1)),
              tseas=c(scale(clim$b7)),
-             precip=c(scale(clim$b12)))
+             precip=c(scale(clim$b12)),
+             el=c(scale(topo$el)),
+             rugg=c(scale(topo$rugg)))
 cor(Yd)
+```
+
+
+```{r spatialSetup}
+b.rows <- cb.i$BlockRow[match(rdLen$BlockID[n$all], cb.i$BlockID)]
+b.cols <- cb.i$BlockCol[match(rdLen$BlockID[n$all], cb.i$BlockID)]
+W <- as.matrix(dist(data.frame(b.rows, b.cols), diag=T, upper=T)) < 1.5
+diag(W) <- 0
 ```
 
 
 ```{r modelRun}
 d <- list(n1=nFit, n2=nFit+1, n3=n$tot, L=6, nB_d=nBd, nB_p=nBp,
-          Y1=Y1.fit[,-6], Y2=Y2[,-5], 
+          Y1=Y1.fit[,-6], Y2=Y2[,-5], W=W, W_n=sum(W)/2,
           X_d1=Xd[[1]], X_d2=Xd[[2]], X_d3=Xd[[3]], X_d4=Xd[[4]], X_p=Xp)
-out <- stan(file="code/LC_mod_qr_d.stan", data=d, init=0, thin=50, 
-            iter=10000, warmup=6000, chains=4, seed=433337, refresh=500,
-            include=FALSE, pars=c("nu_Y1", "nu_Y2", "pX"),
-            control=list(max_treedepth=30, adapt_delta=0.95, metric="diag_e"))
+stan_rdump(ls(d), file="code/LC_mod_examp.Rdump", envir=list2env(d))
+out <- stan(file="code/LC_mod_Y2X_phi.stan", init=0, thin=25,
+            data=read_rdump("code/LC_mod_examp.Rdump"), 
+            iter=5000, warmup=2500, chains=4, seed=4337, refresh=5000,
+            include=FALSE, pars=c("nu", "Y2_new", "Y2_ds", "nu_all"))
 check_treedepth(out); check_energy(out); check_div(out)
 sampler_params <- get_sampler_params(out, inc_warmup=FALSE)
 n_gradients <- sapply(sampler_params, function(x) sum(x[,'n_leapfrog__']))
@@ -133,23 +147,28 @@ gg.nu <- ggs(out, "n_eta") %>% arrange(Parameter, Chain, Iteration)
 nGG <- attr(gg.nu, "nChains")*attr(gg.nu, "nIterations")
 gg.nu %<>% mutate(Y1=t(rbind(Y1.fit, Y1.new)) %>% c %>% rep(each=nGG),
                   LC=1:6 %>% rep(each=nGG) %>% rep(times=n$tot),
-                  Cell=1:n$tot %>% rep(each=nGG*6),
-                  Set=c("Y1+Y2", "Y2") %>% rep(times=c(nFit, nNew)*nGG*6))
+                  BlockID=n$all %>% rep(each=nGG*6),
+                  CellID=1:length(n$all) %>% rep(each=nGG*6),
+                  Set=c("Y1+Y2", "Y2") %>% rep(times=c(nFit, nNew)*nGG*6)) %>%
+  mutate(BlockRow=cb.i$BlockRow[match(.$BlockID, cb.i$BlockID)], 
+         BlockCol=cb.i$BlockCol[match(.$BlockID, cb.i$BlockID)])
 
 # Medians
-gg.med <- gg.nu %>% group_by(Cell, LC, Set, Parameter) %>%
+gg.med <- gg.nu %>% 
+  group_by(CellID, BlockID, BlockRow, BlockCol, LC, Set, Parameter) %>%
   summarise(Y1=first(Y1), med=median(value), 
             q05=quantile(value, 0.05), q25=quantile(value, 0.25),
             q75=quantile(value, 0.75), q95=quantile(value, 0.95)) %>%
-  ungroup() %>% group_by(Cell)
+  ungroup() %>% group_by(BlockID)
 
 # Combine WP + Evg to compare to Y2
 gg.EvgComb <- gg.nu
 gg.EvgComb$LC[gg.EvgComb$LC==5] <- 4
-gg.EvgMed <- gg.EvgComb %>% group_by(Cell, LC, Set) %>%
+gg.EvgMed <- gg.EvgComb %>% group_by(CellID, BlockID, LC, Set) %>%
   summarise(med=median(value), Y1=first(Y1), 
             q05=quantile(value, 0.05), q25=quantile(value, 0.25),
             q75=quantile(value, 0.75), q95=quantile(value, 0.95)) %>%
+  arrange(CellID, LC) %>%
   ungroup %>% mutate(Y2=t(Y2) %>% c)
 
 
@@ -158,21 +177,29 @@ gg.EvgMed <- gg.EvgComb %>% group_by(Cell, LC, Set) %>%
 ##########
 
 ggplot(gg.EvgMed, aes(x=Y1, y=med)) + xlim(0,1) + ylim(0,1) + 
-  geom_point() + geom_abline(slope=1, linetype=3) + facet_grid(Set~LC) 
+  geom_point(alpha=0.5) + facet_grid(Set~LC) + 
+  geom_abline(slope=1, linetype=2, colour="red") + ggtitle("Y2_X")
 ggplot(gg.EvgMed, aes(x=Y1, y=Y2)) + xlim(0,1) + ylim(0,1) + 
-  geom_point() + geom_abline(slope=1, linetype=3) + facet_grid(Set~LC) 
+  geom_point(alpha=0.5) + facet_grid(Set~LC) + 
+  geom_abline(slope=1, linetype=2, colour="red") + ggtitle("Y2_X") 
 ggplot(gg.EvgMed, aes(x=Y2, y=med)) + xlim(0,1) + ylim(0,1) + 
-  geom_point() + geom_abline(slope=1, linetype=3) + facet_grid(Set~LC) 
+  geom_point(alpha=0.5) + facet_grid(Set~LC) + 
+  geom_abline(slope=1, linetype=2, colour="red")  + ggtitle("Y2_X")
 
 ggplot(gg.med, aes(x=Y1, y=med, ymin=q25, ymax=q75)) + xlim(0,1) + ylim(0,1) + 
   geom_pointrange(alpha=0.5, colour="dodgerblue", fatten=1.5) + 
-  geom_abline(slope=1, linetype=3) + facet_grid(Set~LC) 
+  geom_abline(slope=1, linetype=3) + facet_grid(Set~LC)  + ggtitle("Y2_X")
 ggplot(gg.EvgMed, aes(x=Y1, xend=Y1, y=Y2, yend=med,
                       colour=abs(Y2-Y1)<abs(med-Y1))) + 
   geom_abline(slope=1, linetype=3) + facet_grid(Set~LC) +
   scale_colour_manual(values=c("darkgreen", "red")) + xlim(0,1) + ylim(0,1) +
   geom_segment(arrow=arrow(length=unit(0.1, "cm")), alpha=0.4) + 
-  labs(x="Y1", y="Y2 -> median") + theme(legend.position="none")
+  labs(x="Y1", y="Y2 -> median") + theme(legend.position="none") +
+  ggtitle("Y2_X")
+
+ggplot(gg.med, aes(x=BlockCol, y=BlockRow, fill=med-Y1)) + 
+  geom_tile() + facet_grid(Set~LC) +
+  scale_fill_gradient2() + ggtitle("Y2_X")
 
 
 ##########
@@ -191,7 +218,7 @@ gg.EvgMed %>% ungroup %>% group_by(Set, LC) %>%
 ```{r outBeta}
 gg.b <- ggs(out, "beta")
 ggs_caterpillar(gg.b) + geom_vline(xintercept=0)
-ggs_traceplot(gg.b) + facet_wrap(~Parameter, scales="free")
+traceplot(out, pars=c("beta_d", "beta_p"))
 gg.b %>% group_by(Parameter) %>%
   summarise(q025=quantile(value, 0.025) %>% round(3), 
             q25=quantile(value, 0.25) %>% round(3),
@@ -206,14 +233,13 @@ stan_ess(out)
 stan_diag(out)
 stan_rhat(out)
 ggs_crosscorrelation(gg.b)
+ggs_crosscorrelation(ggs(out, "theta"))
 sampler_params <- get_sampler_params(out, inc_warmup=FALSE) %>% do.call(rbind, .)
 samp.out <- cbind(sampler_params[,c(1,6)], extract(out, pars="lp__")[[1]], 
-                  extract(out, pars="L_sigma_unif_Y1")[[1]],
-                  extract(out, pars="L_sigma_unif_Y2")[[1]])
+                  extract(out, pars="L_sigma_unif")[[1]])
 colnames(samp.out) <- c("accept_stat__", "energy__", "lp__", 
                         "L_sig1[1]", "L_sig1[2]", "L_sig1[3]", 
-                        "L_sig1[4]", "L_sig1[5]", 
-                        "L_sig2[1]", "L_sig2[2]", "L_sig2[3]", "L_sig2[4]")
+                        "L_sig1[4]", "L_sig1[5]")
 pairs(samp.out, diag.panel=panel.hist, lower.panel=panel.cor,
       upper.panel=function(...) smoothScatter(...,nrpoints=0, add=TRUE))
 samp.out <- cbind(sampler_params[,c(1,6)], extract(out, pars="lp__")[[1]], 
