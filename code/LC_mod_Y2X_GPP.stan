@@ -94,11 +94,11 @@ parameters {
   vector[nB_p] theta_p;  //pr(WP|Evg) betas (QR decomposition)
   vector[n_beta_d] theta_d;  //bias betas (QR decomposition)
   //GPP
-  real<lower=0> eta;
-  real<lower=0> sigma;
-  real<lower=0> phi;
-  vector[m] w_z;
-  vector[n3] e_z;
+  real<lower=0> eta[L-2];  //sqrt(GPP variance)
+  real<lower=0> sigma[L-2];  //sqrt(nugget)
+  real<lower=0> phi[L-2];  //decay rate
+  vector[m] w_z[L-2];  //spatial effects
+  vector[n3] e_z[L-2];  //
 }
 
 transformed parameters {
@@ -108,43 +108,45 @@ transformed parameters {
   vector[nB_p] beta_p;
   vector[n_beta_d] beta_d;
   //GPP
-  vector[n3] w;
-  vector[n3] sigma_e_tilde;
-  matrix[m,m] Cstar;
-  vector[m] w_star;
-  matrix[m,m] inv_Cstar;
-  matrix[n3,m] C_site_star;
-  matrix[n3,m] C_ss_inv_Cstar;
-  real eta_sq;
-  real sig_sq;
+  vector[n3] w[L-2];
+  vector[n3] sigma_e_tilde[L-2];
+  matrix[m,m] Cstar[L-2];
+  vector[m] w_star[L-2];
+  matrix[m,m] inv_Cstar[L-2];
+  matrix[n3,m] C_site_star[L-2];
+  matrix[n3,m] C_ss_inv_Cstar[L-2];
+  real eta_sq[L-2];
+  real sig_sq[L-2];
 
 
   //latent gp at knots
-  eta_sq = pow(eta, 2);
-  sig_sq = pow(sigma, 2);
-  for(i in 1:(m-1)) {
-	  for(j in (i+1):m) {
-		  Cstar[i,j] = eta_sq * exp(-D_star[i,j] * phi);
-		  Cstar[j,i] = Cstar[i,j];
-	  }
-  }
-  for(k in 1:m) {
-	  Cstar[k,k] = eta_sq + sig_sq;
-  }
-  inv_Cstar = inverse(Cstar);
-  w_star = cholesky_decompose(Cstar) * w_z;
+  for(l in 1:(L-2)) {
+    eta_sq[l] = pow(eta[l], 2);
+    sig_sq[l] = pow(sigma[l], 2);
+    for(i in 1:(m-1)) {
+	    for(j in (i+1):m) {
+		    Cstar[l,i,j] = eta_sq[l] * exp(-D_star[i,j] * phi[l]);
+		    Cstar[l,j,i] = Cstar[l,i,j];
+	    }
+    }
+    for(k in 1:m) {
+	    Cstar[l,k,k] = eta_sq[l] + sig_sq[l];
+    }
+    inv_Cstar[l] = inverse(Cstar[l]);
+    w_star[l] = cholesky_decompose(Cstar[l]) * w_z[l];
   
-  //latent gp at sample locations
-  C_site_star = eta_sq * exp(-D_site_star * phi);
-  C_ss_inv_Cstar = C_site_star * inv_Cstar;
-  w = C_site_star * inv_Cstar * w_star;
+    //latent gp at sample locations
+    C_site_star[l] = eta_sq[l] * exp(-D_site_star * phi[l]);
+    C_ss_inv_Cstar[l] = C_site_star[l] * inv_Cstar[l];
+    w[l] = C_site_star[l] * inv_Cstar[l] * w_star[l];
   
-  //bias adjustment from Finley et al. 2009
-  sigma_e_tilde = eta_sq + sig_sq - rows_dot_product(C_ss_inv_Cstar, C_site_star);
-  for(i in 1:n1) {
-	  w[i] = w[i] + e_z[i] * sqrt(sigma_e_tilde[i]);
-  }
-  
+    //bias adjustment from Finley et al. 2009
+    sigma_e_tilde[l] = eta_sq[l] + sig_sq[l]
+          - rows_dot_product(C_ss_inv_Cstar[l], C_site_star[l]);
+    for(i in 1:n3) {
+  	  w[l,i] = w[l,i] + e_z[l,i] * sqrt(sigma_e_tilde[l,i]);
+    }
+  }  
   //QR decompositions
   beta_p = R_inv_p * theta_p;
   beta_d[1:d1_2] = R_inv_d1 * theta_d[1:d1_2];
@@ -154,18 +156,22 @@ transformed parameters {
   
 
   Y2_ds[,1] = to_array_1d(to_vector(Y2[1:n1,1]) 
-      + (Q_d1[1:n1] * theta_d[1:d1_2]));
+      + (Q_d1[1:n1] * theta_d[1:d1_2])
+      + w[1,1:n1]);
   Y2_ds[,2] = to_array_1d(to_vector(Y2[1:n1,2]) 
-      + (Q_d2[1:n1] * theta_d[d2_1:d2_2]));
+      + (Q_d2[1:n1] * theta_d[d2_1:d2_2])
+      + w[2,1:n1]);
   Y2_ds[,3] = to_array_1d(to_vector(Y2[1:n1,3]) 
       + (Q_d3[1:n1] * theta_d[d3_1:d3_2]) 
-      + w[1:n1]);
+      + w[3,1:n1]);
   Y2_ds[,4] = to_array_1d((to_vector(Y2[1:n1,4]) 
       + (Q_d4[1:n1] * theta_d[d4_1:d4_2]))
-        .* inv_logit(Q_p[1:n1] * theta_p));
+        .* inv_logit(Q_p[1:n1] * theta_p)
+      + w[4,1:n1]);
   Y2_ds[,5] = to_array_1d((to_vector(Y2[1:n1,4]) 
       + (Q_d4[1:n1] * theta_d[d4_1:d4_2]))
-        .* (1 - inv_logit(Q_p[1:n1] * theta_p)));  
+        .* (1 - inv_logit(Q_p[1:n1] * theta_p))
+      + w[4,1:n1]);  
 }
 
 model {
@@ -173,8 +179,10 @@ model {
   sigma ~ normal(0, 1);
   eta ~ normal(0, 1);
   phi ~ normal(0, 5);
-  w_z ~ normal(0, 1);
-  e_z ~ normal(0, 1);
+  for(l in 1:(L-2)) {
+    w_z[l] ~ normal(0, 1);
+    e_z[l] ~ normal(0, 1);
+  }
   
   //covariance priors
   L_Omega ~ lkj_corr_cholesky(8);
@@ -194,18 +202,22 @@ generated quantities {
   simplex[L] n_eta[n3];
 
   Y2_ds_new[,1] = to_array_1d(to_vector(Y2[n2:n3,1])
-      + (Q_d1[n2:n3] * theta_d[1:d1_2]));
+      + (Q_d1[n2:n3] * theta_d[1:d1_2])
+      + w[1,n2:n3]);
   Y2_ds_new[,2] = to_array_1d(to_vector(Y2[n2:n3,2])
-      + (Q_d2[n2:n3] * theta_d[d2_1:d2_2]));
+      + (Q_d2[n2:n3] * theta_d[d2_1:d2_2])
+      + w[2,n2:n3]);
   Y2_ds_new[,3] = to_array_1d(to_vector(Y2[n2:n3,3])
       + (Q_d3[n2:n3] * theta_d[d3_1:d3_2])
-      + w[n2:n3]);
+      + w[3,n2:n3]);
   Y2_ds_new[,4] = to_array_1d((to_vector(Y2[n2:n3,4])
       + (Q_d4[n2:n3] * theta_d[d4_1:d4_2]))
-        .* inv_logit(Q_p[n2:n3] * theta_p));
+        .* inv_logit(Q_p[n2:n3] * theta_p)
+      + w[4,n2:n3]);
   Y2_ds_new[,5] = to_array_1d((to_vector(Y2[n2:n3,4])
       + (Q_d4[n2:n3] * theta_d[d4_1:d4_2]))
-        .* (1 - inv_logit(Q_p[n2:n3] * theta_p)));
+        .* (1 - inv_logit(Q_p[n2:n3] * theta_p))
+      + w[4,n2:n3]);
 
   for(n in 1:n1) {
     n_eta[n] = tr_gjam_inv(Y2_ds[n]);
