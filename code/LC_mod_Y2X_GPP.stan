@@ -53,7 +53,7 @@ data {
   matrix[n3,nB_d[3]] X_d3;  //bias covariates: Hwd
   matrix[n3,nB_d[4]] X_d4;  //bias covariates: Evg
   //GPP spatial random effects
-  int<lower=1, upper=n1> m;
+  int<lower=1, upper=n3> m;
   matrix[m,m] D_star;
   matrix[n3,m] D_site_star;
 }
@@ -94,11 +94,11 @@ parameters {
   vector[nB_p] theta_p;  //pr(WP|Evg) betas (QR decomposition)
   vector[n_beta_d] theta_d;  //bias betas (QR decomposition)
   //GPP
-  real<lower=0> eta[L-2];  //sqrt(GPP variance)
-  real<lower=0> sigma[L-2];  //sqrt(nugget)
-  real<lower=0> phi[L-2];  //decay rate
-  vector[m] w_z[L-2];  //spatial effects
-  vector[n3] e_z[L-2];  //
+  real<lower=0> eta[L-1];  //sqrt(GPP variance)
+  real<lower=0> sigma[L-1];  //sqrt(nugget)
+  real<lower=0> phi[L-1];  //decay rate
+  vector[m] w_z[L-1];  //spatial effects
+  vector[n3] e_z[L-1];  //
 }
 
 transformed parameters {
@@ -108,19 +108,19 @@ transformed parameters {
   vector[nB_p] beta_p;
   vector[n_beta_d] beta_d;
   //GPP
-  vector[n3] w[L-2];
-  vector[n3] sigma_e_tilde[L-2];
-  matrix[m,m] Cstar[L-2];
-  vector[m] w_star[L-2];
-  matrix[m,m] inv_Cstar[L-2];
-  matrix[n3,m] C_site_star[L-2];
-  matrix[n3,m] C_ss_inv_Cstar[L-2];
-  real eta_sq[L-2];
-  real sig_sq[L-2];
+  vector[n3] w[L-1];
+  vector[n3] sigma_e_tilde[L-1];
+  matrix[m,m] Cstar[L-1];
+  vector[m] w_star[L-1];
+  matrix[m,m] inv_Cstar[L-1];
+  matrix[n3,m] C_site_star[L-1];
+  matrix[n3,m] C_ss_inv_Cstar[L-1];
+  real eta_sq[L-1];
+  real sig_sq[L-1];
 
 
   //latent gp at knots
-  for(l in 1:(L-2)) {
+  for(l in 1:(L-1)) {
     eta_sq[l] = pow(eta[l], 2);
     sig_sq[l] = pow(sigma[l], 2);
     for(i in 1:(m-1)) {
@@ -171,7 +171,7 @@ transformed parameters {
   Y2_ds[,5] = to_array_1d((to_vector(Y2[1:n1,4]) 
       + (Q_d4[1:n1] * theta_d[d4_1:d4_2]))
         .* (1 - inv_logit(Q_p[1:n1] * theta_p))
-      + w[4,1:n1]);  
+      + w[5,1:n1]);  
 }
 
 model {
@@ -179,7 +179,7 @@ model {
   sigma ~ normal(0, 1);
   eta ~ normal(0, 1);
   phi ~ normal(0, 5);
-  for(l in 1:(L-2)) {
+  for(l in 1:(L-1)) {
     w_z[l] ~ normal(0, 1);
     e_z[l] ~ normal(0, 1);
   }
@@ -217,7 +217,7 @@ generated quantities {
   Y2_ds_new[,5] = to_array_1d((to_vector(Y2[n2:n3,4])
       + (Q_d4[n2:n3] * theta_d[d4_1:d4_2]))
         .* (1 - inv_logit(Q_p[n2:n3] * theta_p))
-      + w[4,n2:n3]);
+      + w[5,n2:n3]);
 
   for(n in 1:n1) {
     n_eta[n] = tr_gjam_inv(Y2_ds[n]);
