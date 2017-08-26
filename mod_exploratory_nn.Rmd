@@ -15,7 +15,7 @@ source("code/LC_fun.R")
 
 ```{r readData, message=FALSE}
 grdSz <- "01_1a"
-blockSize <- 5  # block = (blockSize x blockSize) grid cells
+blockSize <- 2  # block = (blockSize x blockSize) grid cells
 
 # cell-block reference tibble
 cb.i <- read_csv(paste0("data/roads_", grdSz, ".csv")) %>% 
@@ -196,21 +196,22 @@ resp.scaled <- as.data.frame(scale(resp, center=resp.rng[[1]],
                                    scale=resp.rng[[2]]-resp.rng[[1]]))
 resp.train <- resp.scaled[index,]
 resp.test <- resp.scaled[-index,]
-nn.train <- data.frame(resp.train, rand.train)
-nn.test <- data.frame(resp.test, rand.test)
-# mod1 <- nnet(rand.train, resp.train, data=nn.train, size=12, softmax=TRUE,
-            # maxit=10000)
-mod2 <- mlp(rand.train, resp.train, size=16, maxit=100000)
-# plot.nnet(mod2)
+mod2 <- mlp(rand.train, resp.train, size=9, maxit=10000)
+fit.df <- data.frame(Y1=c(as.matrix(resp.train)),
+                     pred.m2=c(as.matrix(mod2$fitted.values)),
+                     LC=rep(1:6, each=nrow(resp.train)),
+                     Y2=c(as.matrix(cbind(rand.train[,1:3], 
+                               rand.train[,4]*rand.train[,6],
+                               rand.train[,4]*(1-rand.train[,6]),
+                               rand.train[,5]))))
 pr.df <- data.frame(Y1=c(as.matrix(resp.test)),
-                    # pred.m1=c(predict(mod1, nn.test, type="raw")),
                     pred.m2=c(predict(mod2, rand.test)),
                     LC=rep(1:6, each=nrow(resp.test)),
                     Y2=c(as.matrix(cbind(rand.test[,1:3], 
                                rand.test[,4]*rand.test[,6],
                                rand.test[,4]*(1-rand.test[,6]),
                                rand.test[,5]))))
-ggplot(pr.df, aes(x=Y1, y=pred.m2)) + geom_point(alpha=0.5) +
+ggplot(fit.df, aes(x=Y1, y=pred.m2)) + geom_point(alpha=0.5) +
   xlim(0,1) + ylim(0,1) +
   geom_abline(slope=1, colour="red", linetype=2) + facet_wrap(~LC)
 ggplot(pr.df, aes(x=Y1, y=Y2)) + geom_point(alpha=0.5) +
