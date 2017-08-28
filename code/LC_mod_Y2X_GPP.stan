@@ -109,12 +109,10 @@ transformed parameters {
   vector[n_beta_d] beta_d;
   //GPP
   vector[n3] w[L-1];
-  vector[n3] sigma_e_tilde[L-1];
   matrix[m,m] Cstar[L-1];
   vector[m] w_star[L-1];
   matrix[m,m] inv_Cstar[L-1];
   matrix[n3,m] C_site_star[L-1];
-  matrix[n3,m] C_ss_inv_Cstar[L-1];
   real eta_sq[L-1];
   real sig_sq[L-1];
 
@@ -123,29 +121,24 @@ transformed parameters {
   for(l in 1:(L-1)) {
     eta_sq[l] = pow(eta[l], 2);
     sig_sq[l] = pow(sigma[l], 2);
+    Cstar[l] = diag_matrix(rep_vector(eta_sq[l] + sig_sq[l], m));
     for(i in 1:(m-1)) {
 	    for(j in (i+1):m) {
 		    Cstar[l,i,j] = eta_sq[l] * exp(-D_star[i,j] * phi[l]);
 		    Cstar[l,j,i] = Cstar[l,i,j];
 	    }
     }
-    for(k in 1:m) {
-	    Cstar[l,k,k] = eta_sq[l] + sig_sq[l];
-    }
     inv_Cstar[l] = inverse(Cstar[l]);
     w_star[l] = cholesky_decompose(Cstar[l]) * w_z[l];
   
-    //latent gp at sample locations
+    //latent gp at sample locations + bias adjustment from Finley et al. 2009
     C_site_star[l] = eta_sq[l] * exp(-D_site_star * phi[l]);
-    C_ss_inv_Cstar[l] = C_site_star[l] * inv_Cstar[l];
-    w[l] = C_site_star[l] * inv_Cstar[l] * w_star[l];
-  
-    //bias adjustment from Finley et al. 2009
-    sigma_e_tilde[l] = eta_sq[l] + sig_sq[l]
-          - rows_dot_product(C_ss_inv_Cstar[l], C_site_star[l]);
-    for(i in 1:n3) {
-  	  w[l,i] = w[l,i] + e_z[l,i] * sqrt(sigma_e_tilde[l,i]);
-    }
+    w[l] = C_site_star[l] * inv_Cstar[l] * w_star[l] 
+          + (e_z[l] 
+            .* sqrt(eta_sq[l] 
+                    + sig_sq[l]
+                    - rows_dot_product(C_site_star[l] * inv_Cstar[l], 
+                                       C_site_star[l])));
   }  
   //QR decompositions
   beta_p = R_inv_p * theta_p;
