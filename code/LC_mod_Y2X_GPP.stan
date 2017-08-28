@@ -111,7 +111,7 @@ transformed parameters {
   vector[n3] w[L-1];
   matrix[m,m] Cstar[L-1];
   vector[m] w_star[L-1];
-  matrix[m,m] inv_Cstar[L-1];
+  matrix[n3,m] C_site_inv_Cstar[L-1];
   matrix[n3,m] C_site_star[L-1];
   real eta_sq[L-1];
   real sig_sq[L-1];
@@ -128,17 +128,16 @@ transformed parameters {
 		    Cstar[l,j,i] = Cstar[l,i,j];
 	    }
     }
-    inv_Cstar[l] = inverse(Cstar[l]);
     w_star[l] = cholesky_decompose(Cstar[l]) * w_z[l];
   
     //latent gp at sample locations + bias adjustment from Finley et al. 2009
     C_site_star[l] = eta_sq[l] * exp(-D_site_star * phi[l]);
-    w[l] = C_site_star[l] * inv_Cstar[l] * w_star[l] 
+    // efficient and arithmetically stable for: C_site_star * inverse(Cstar)
+    C_site_inv_Cstar[l] = mdivide_right_spd(C_site_star[l], Cstar[l]);
+    w[l] = C_site_inv_Cstar[l] * w_star[l] 
           + (e_z[l] 
-            .* sqrt(eta_sq[l] 
-                    + sig_sq[l]
-                    - rows_dot_product(C_site_star[l] * inv_Cstar[l], 
-                                       C_site_star[l])));
+            .* sqrt(eta_sq[l] + sig_sq[l]
+                    - rows_dot_product(C_site_inv_Cstar[l], C_site_star[l])));
   }  
   //QR decompositions
   beta_p = R_inv_p * theta_p;
