@@ -76,12 +76,12 @@ sampleCells <- function(nFit, nNew, nPop) {
 
 place_knots <- function(mx, my, coords) {
   # from https://github.com/mbjoseph/gpp-speed-test
-  xcoords <- seq(min(coords[, 2]), max(coords[, 2]), length.out = mx + 1)
-  ycoords <- seq(min(coords[, 1]), max(coords[, 1]), length.out = my + 1)
+  xcoords <- seq(min(coords[, 1]), max(coords[, 1]), length.out = mx + 1)
+  ycoords <- seq(min(coords[, 2]), max(coords[, 2]), length.out = my + 1)
   x_offset <- diff(xcoords)[1] / 2
   y_offset <- diff(ycoords)[1] / 2
-  expand.grid(b.rows = ycoords[-c(my + 1)] + y_offset,
-              b.cols = xcoords[-c(mx + 1)] + x_offset)
+  expand.grid(b.cols = xcoords[-c(mx + 1)] + x_offset,
+              b.rows = ycoords[-c(my + 1)] + y_offset)
 }
 
 
