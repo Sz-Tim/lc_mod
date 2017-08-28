@@ -14,7 +14,7 @@ source("code/LC_fun.R"); source("code/stan_utilities.R")
 
 ```{r readData, message=FALSE}
 grdSz <- "01_1a"
-blockSize <- 50  # block = (blockSize x blockSize) grid cells
+blockSize <- 15  # block = (blockSize x blockSize) grid cells
 
 # cell-block reference tibble
 cb.i <- read_csv(paste0("data/roads_", grdSz, ".csv")) %>% 
@@ -63,8 +63,8 @@ nlcd <- read_csv(paste0("data/out_",grdSz,"_nlcd.csv"))  %>%
 ```{r modelSetup}
 # small scale runs: set nCell for Y1&Y2 and Y2
 set.seed(2222)
-nFit <- 50
-nNew <- 30
+nFit <- 583
+nNew <- 389
 n <- sampleCells(nFit, nNew, nrow(grnt))
 
 # Y1 & Y2
@@ -117,32 +117,35 @@ cor(Yd)
 # block distances & adjacency
 b.rows <- cb.i$BlockRow[match(rdLen$BlockID[n$all], cb.i$BlockID)]
 b.cols <- cb.i$BlockCol[match(rdLen$BlockID[n$all], cb.i$BlockID)]
-coords <- data.frame(b.rows, b.cols)
+coords <- data.frame(b.cols, b.rows)
 D <- as.matrix(dist(coords))
-W <- as.matrix(dist(coords, diag=T, upper=T)) < 1.5
-diag(W) <- 0
+# W <- as.matrix(dist(coords, diag=T, upper=T)) < 1.5
+# diag(W) <- 0
 
 # knots
-m.x <- 4
-m.y <- 5
-m <- m.x * m.y
-coords_star <- place_knots(m.x, m.y, coords)
+m.rows <- 5
+m.cols <- 6
+m <- m.rows * m.cols
+coords_star <- place_knots(m.rows, m.cols, coords)
 D_star <- as.matrix(dist(coords_star))
 D_site_star <- as.matrix(dist(rbind(coords, coords_star)))[1:n$tot, 
                                                            (n$tot+1):(n$tot+m)]
+plot(coords, pch=20, col="gray40"); points(coords_star, pch=8, col="red")
 ```
 
 
 ```{r modelRun}
 d <- list(n1=nFit, n2=nFit+1, n3=n$tot, L=6, nB_d=nBd, nB_p=nBp,
-          Y1=Y1.fit[,-6], Y2=Y2[,-5], W=W, W_n=sum(W)/2,
+          Y1=Y1.fit[,-6], Y2=Y2[,-5], #W=W, W_n=sum(W)/2,
           m=m, D_star=D_star, D_site_star=D_site_star,
           X_d1=Xd[[1]], X_d2=Xd[[2]], X_d3=Xd[[3]], X_d4=Xd[[4]], X_p=Xp)
 stan_rdump(ls(d), file="code/LC_mod_examp.Rdump", envir=list2env(d))
 out <- stan(file="code/LC_mod_Y2X_GPP.stan", init=0, thin=25,
             data=read_rdump("code/LC_mod_examp.Rdump"), 
-            iter=1000, warmup=500, chains=1, seed=4337, refresh=100,
-            include=FALSE, pars=c("nu", "Y2_new", "Y2_ds", "nu_all", "phi"),
+            iter=5000, warmup=2500, chains=2, seed=4337, refresh=50,
+            include=FALSE, pars=c("Y2_ds", "w_z", "e_z", "w", "sigma_e_tilde",
+                                  "Cstar", "w_star", "inv_Cstar",
+                                  "C_site_star", "C_ss_inv_Cstar"),
             control=list(max_treedepth=15, adapt_delta=0.9))
 check_treedepth(out); check_energy(out); check_div(out)
 sampler_params <- get_sampler_params(out, inc_warmup=FALSE)
