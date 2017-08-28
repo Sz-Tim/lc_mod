@@ -53,7 +53,7 @@ data {
   matrix[n3,nB_d[3]] X_d3;  //bias covariates: Hwd
   matrix[n3,nB_d[4]] X_d4;  //bias covariates: Evg
   //GPP spatial random effects
-  int<lower=1, upper=n1> m;
+  int<lower=1, upper=n3> m;
   matrix[m,m] D_star;
   matrix[n3,m] D_site_star;
 }
