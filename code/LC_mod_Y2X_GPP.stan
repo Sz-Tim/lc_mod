@@ -109,10 +109,10 @@ transformed parameters {
   vector[n_beta_d] beta_d;
   //GPP
   vector[n3] w[L-1];
-  matrix[m,m] Cstar[L-1];
   vector[m] w_star[L-1];
-  matrix[n3,m] C_site_inv_Cstar[L-1];
+  matrix[m,m] Cstar[L-1];
   matrix[n3,m] C_site_star[L-1];
+  matrix[n3,m] C_site_inv_Cstar[L-1];
   real eta_sq[L-1];
   real sig_sq[L-1];
 
