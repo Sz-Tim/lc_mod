@@ -14,7 +14,7 @@ source("code/LC_fun.R"); source("code/stan_utilities.R")
 
 ```{r readData, message=FALSE}
 grdSz <- "01_1a"
-blockSize <- 50  # block = (blockSize x blockSize) grid cells
+blockSize <- 15  # block = (blockSize x blockSize) grid cells
 
 # cell-block reference tibble
 cb.i <- read_csv(paste0("data/roads_", grdSz, ".csv")) %>% 
@@ -63,8 +63,8 @@ nlcd <- read_csv(paste0("data/out_",grdSz,"_nlcd.csv"))  %>%
 ```{r modelSetup}
 # small scale runs: set nCell for Y1&Y2 and Y2
 set.seed(2222)
-nFit <- 50
-nNew <- 30
+nFit <- 583
+nNew <- 389
 n <- sampleCells(nFit, nNew, nrow(grnt))
 
 # Y1 & Y2
@@ -123,8 +123,8 @@ D <- as.matrix(dist(coords))
 # diag(W) <- 0
 
 # knots
-m.rows <- 4
-m.cols <- 5
+m.cols <- 10
+m.rows <- 6
 m <- m.rows * m.cols
 coords_star <- place_knots(m.cols, m.rows, coords)
 D_star <- as.matrix(dist(coords_star))
@@ -143,9 +143,8 @@ stan_rdump(ls(d), file="code/LC_mod_examp.Rdump", envir=list2env(d))
 out <- stan(file="code/LC_mod_Y2X_GPP.stan", init=0, thin=25,
             data=read_rdump("code/LC_mod_examp.Rdump"), 
             iter=2000, warmup=1000, chains=4, seed=4337, refresh=10,
-            include=FALSE, pars=c("Y2_ds", "w_z", "e_z", "w", "sigma_e_tilde",
-                                  "Cstar", "w_star", "inv_Cstar",
-                                  "C_site_star", "C_ss_inv_Cstar"))
+            include=FALSE, pars=c("Y2_ds", "e_z", "w_z", "w", "w_star",
+                                  "Cstar", "C_site_inv_Cstar", "C_site_star"))
 check_treedepth(out); check_energy(out); check_div(out)
 sampler_params <- get_sampler_params(out, inc_warmup=FALSE)
 n_gradients <- sapply(sampler_params, function(x) sum(x[,'n_leapfrog__']))
