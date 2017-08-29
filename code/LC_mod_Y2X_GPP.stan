@@ -1,26 +1,18 @@
 functions {
   vector tr_gjam_inv(vector w) {
     vector[6] eta;
+    vector[5] w_p_;
     real w_p;
     real D_i;
-    real ls_1;
-    int gr_1;
     
     eta[1:5] = w;
-    ls_1 = 0;
-    gr_1 = 0;
     
     for(l in 1:5) {  
-      if(eta[l] < 0) {
-        eta[l] = 0;
-      }
-      if(eta[l] < 1) {
-        ls_1 = ls_1 + eta[l];
-      } else {
-        gr_1 = gr_1 + 1;
-      }
+      if(eta[l] < 0)  eta[l] = 0; 
+      if(eta[l] < 1)  w_p_[l] = eta[l];
+      else  w_p_[l] = 1;
     }
-    w_p = ls_1 + gr_1;
+    w_p = sum(w_p_);
     
     if(w_p >= 0.99) {
       vector[5] tmp;
@@ -53,9 +45,9 @@ data {
   matrix[n3,nB_d[3]] X_d3;  //bias covariates: Hwd
   matrix[n3,nB_d[4]] X_d4;  //bias covariates: Evg
   //GPP spatial random effects
-  int<lower=1, upper=n3> m;
-  matrix[m,m] D_star;
-  matrix[n3,m] D_site_star;
+  int<lower=1, upper=n3> m;  //number of knots
+  matrix[m,m] D_star;  //distance matrix for knots
+  matrix[n3,m] D_site_star;  //distance matrix for points to knots
 }
 
 transformed data {
@@ -89,7 +81,7 @@ transformed data {
 parameters {
   //landcover: covariance
   cholesky_factor_corr[L-1] L_Omega; 
-  vector<lower=0, upper=pi()/2>[L-1] L_sigma_unif;  
+  vector<lower=0>[L-1] L_sigma; 
   //betas
   vector[nB_p] theta_p;  //pr(WP|Evg) betas (QR decomposition)
   vector[n_beta_d] theta_d;  //bias betas (QR decomposition)
@@ -170,7 +162,7 @@ model {
   //gpp
   sigma ~ normal(0, 1);
   eta ~ normal(0, 1);
-  phi ~ normal(0, 5);
+  phi ~ normal(0, 1);
   for(l in 1:(L-1)) {
     w_z[l] ~ normal(0, 1);
     e_z[l] ~ normal(0, 1);
@@ -178,6 +170,7 @@ model {
   
   //covariance priors
   L_Omega ~ lkj_corr_cholesky(8);
+  L_sigma ~ normal(0, 1);
   
   //beta priors
   beta_p ~ normal(0, 1);
@@ -185,7 +178,7 @@ model {
   
   //likelihood
    Y1 ~ multi_normal_cholesky(Y2_ds, 
-                diag_pre_multiply(2.5 * tan(L_sigma_unif), L_Omega));
+                diag_pre_multiply(L_sigma, L_Omega));
 }
 
 generated quantities {
