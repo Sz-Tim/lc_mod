@@ -58,12 +58,17 @@ add_blocks <- function(x, cb.i=cb.i) {
 
 
 
-sampleCells <- function(nFit, nNew, nPop) {
+sampleCells <- function(nFit, nNew, nPop, partition=FALSE) {
   # samples cells for running the model at smaller extents
+  # partition controls whether the cells are randomly assigned or partitioned
   totCell <- nFit + nNew
-  all <- sample(1:nPop, totCell)
-  fit <- all[1:nFit]
-  new <- all[(nFit+1):totCell]
+  if(partition) {
+    all <- 1:totCell
+  } else {
+    all <- sample(1:nPop, totCell)
+  }
+    fit <- all[1:nFit]
+    new <- all[(nFit+1):totCell]
   return(list(all=all, fit=fit, new=new, tot=totCell))
 }
 
