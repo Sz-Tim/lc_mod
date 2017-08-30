@@ -15,7 +15,7 @@ source("code/LC_fun.R")
 
 ```{r readData, message=FALSE}
 grdSz <- "01_1a"
-blockSize <- 2  # block = (blockSize x blockSize) grid cells
+blockSize <- 10  # block = (blockSize x blockSize) grid cells
 
 # cell-block reference tibble
 cb.i <- read_csv(paste0("data/roads_", grdSz, ".csv")) %>% 
@@ -62,46 +62,12 @@ nlcd <- read_csv(paste0("data/out_",grdSz,"_nlcd.csv"))  %>%
 
 
 ```{r modelSetup}
-# small scale runs: set nCell for Y1&Y2 and Y2
-set.seed(2222)
-nFit <- 12
-nNew <- 8
-n <- sampleCells(nFit, nNew, nrow(grnt))
-
-# Y1 & Y2
-Y1.fit <- grnt[n$fit,]
-Y1.new <- grnt[n$new,]
-Y2 <- nlcd[n$all,]
-
-# covariates: bias (Dev, Oth, Hwd, Evg, Mxd)
-Xd <- vector("list", 4)
-Xd[[1]] <- cbind(scale(rdLen$rdLen[n$all]), 
-                 scale(pop00$popTot[n$all]),
-                 scale(topo$el[n$all]))
-Xd[[2]] <- cbind(scale(rdLen$rdLen[n$all]), 
-                 scale(pop00$popTot[n$all]),
-                 scale(clim$b7[n$all]))
-Xd[[3]] <- cbind(scale(clim$b7[n$all]), 
-                 scale(pop00$popTot[n$all]), 
-                 scale(topo$el[n$all]))
-Xd[[4]] <- cbind(scale(clim$b1[n$all]), 
-                 scale(clim$b12[n$all]),
-                 scale(pop00$popTot[n$all]))
-nBd <- map_int(Xd, ncol)  # nBeta for each covariate
-
-# covariates: WP|Evg
-Xp <- cbind(scale(pWP$mnWP[n$all]), 
-            scale(clim$b1[n$all]),
-            scale(pop00$popTot[n$all]),
-            scale(topo$rugg[n$all]))
-nBp <- ncol(Xp)
-
 Yd <- tibble(d1=c(scale(grnt[,1]-nlcd[,1])),
              d2=c(scale(grnt[,2]-nlcd[,2])),
              d3=c(scale(grnt[,3]-nlcd[,3])),
              d4=c(scale((grnt[,4] + grnt[,5])-nlcd[,4])),
              nuWP=c(scale((grnt[,4]+0.0001)/(grnt[,4] + grnt[,5] + 0.0001))),
-             # valWP=c(scale(pWP$mnWP)),
+             valWP=c(scale(pWP$mnWP)),
              rdLen=c(scale(rdLen$rdLen)),
              pop00=c(scale(pop00$popTot)),
              hous00=c(scale(hous00$secHome)),
@@ -160,73 +126,89 @@ legend('bottomright',legend='LM',pch=18,col='blue', bty='n', cex=.95)
 ##########
 # testing with GRANIT ~ NLCD
 ##########
-library(nnet); library(RSNNS)
+library(RSNNS)
 index <- sample(1:nrow(nlcd), round(0.75*nrow(nlcd)))
-rand.vars <- data.frame(NLCD.1=nlcd[,1],
-                        NLCD.2=nlcd[,2],
-                        NLCD.3=nlcd[,3],
-                        NLCD.4=nlcd[,4],
-                        NLCD.5=nlcd[,5],
-                        valWP=pWP$mnWP,
-                        rdLen=rdLen$rdLen,
-                        pop00=pop00$popTot,
-                        hous00=hous00$secHome,
-                        tmean=clim$b1,
-                        tseas=clim$b7,
-                        precip=clim$b12,
-                        el=topo$el,
-                        rugg=topo$rugg,
-                        BlockRow=cb.i$BlockRow[match(pop00$BlockID,
-                                                     cb.i$BlockID)],
-                        BlockCol=cb.i$BlockCol[match(pop00$BlockID,
-                                                     cb.i$BlockID)])
-rand.rng <- list(mins=apply(rand.vars, 2, min), maxs=apply(rand.vars, 2, max))
-rand.scaled <- as.data.frame(scale(rand.vars, center=rand.rng[[1]], 
-                                   scale=rand.rng[[2]]-rand.rng[[1]]))
-rand.train <- rand.scaled[index,]
-rand.test <- rand.scaled[-index,]
-resp <- data.frame(GRNT.1=grnt[,1],
-                   GRNT.2=grnt[,2],
-                   GRNT.3=grnt[,3],
-                   GRNT.4=grnt[,4],
-                   GRNT.5=grnt[,5],
-                   GRNT.6=grnt[,6])
-resp.rng <- list(mins=apply(resp, 2, min), maxs=apply(resp, 2, max))
-resp.scaled <- as.data.frame(scale(resp, center=resp.rng[[1]], 
-                                   scale=resp.rng[[2]]-resp.rng[[1]]))
-resp.train <- resp.scaled[index,]
-resp.test <- resp.scaled[-index,]
-mod2 <- mlp(rand.train, resp.train, size=9, maxit=10000)
-fit.df <- data.frame(Y1=c(as.matrix(resp.train)),
-                     pred.m2=c(as.matrix(mod2$fitted.values)),
-                     LC=rep(1:6, each=nrow(resp.train)),
-                     Y2=c(as.matrix(cbind(rand.train[,1:3], 
-                               rand.train[,4]*rand.train[,6],
-                               rand.train[,4]*(1-rand.train[,6]),
-                               rand.train[,5]))))
-pr.df <- data.frame(Y1=c(as.matrix(resp.test)),
-                    pred.m2=c(predict(mod2, rand.test)),
-                    LC=rep(1:6, each=nrow(resp.test)),
-                    Y2=c(as.matrix(cbind(rand.test[,1:3], 
-                               rand.test[,4]*rand.test[,6],
-                               rand.test[,4]*(1-rand.test[,6]),
-                               rand.test[,5]))))
-ggplot(fit.df, aes(x=Y1, y=pred.m2)) + geom_point(alpha=0.5) +
+X <- data.frame(NLCD.1=nlcd[,1],
+                NLCD.2=nlcd[,2],
+                NLCD.3=nlcd[,3],
+                NLCD.4=nlcd[,4],
+                NLCD.5=nlcd[,5],
+                valWP=pWP$mnWP,
+                rdLen=rdLen$rdLen,
+                pop00=pop00$popTot,
+                hous00=hous00$secHome,
+                tmean=clim$b1,
+                tseas=clim$b7,
+                precip=clim$b12,
+                el=topo$el,
+                rugg=topo$rugg,
+                BlockRow=cb.i$BlockRow[match(pop00$BlockID,
+                                             cb.i$BlockID)],
+                BlockCol=cb.i$BlockCol[match(pop00$BlockID,
+                                             cb.i$BlockID)])
+X.rng <- list(mins=apply(X, 2, min), maxs=apply(X, 2, max))
+X.scaled <- as.data.frame(scale(X, center=X.rng[[1]], 
+                                   scale=X.rng[[2]]-X.rng[[1]]))
+X.train <- X.scaled[index,]
+X.test <- X.scaled[-index,]
+Y <- data.frame(GRNT.1=grnt[,1],
+                GRNT.2=grnt[,2],
+                GRNT.3=grnt[,3],
+                GRNT.4=grnt[,4],
+                GRNT.5=grnt[,5],
+                GRNT.6=grnt[,6])
+Y.rng <- list(mins=apply(Y, 2, min), maxs=apply(Y, 2, max))
+Y.scaled <- as.data.frame(scale(Y, center=Y.rng[[1]], 
+                                scale=Y.rng[[2]]-Y.rng[[1]]))
+Y.train <- Y.scaled[index,]
+Y.test <- Y.scaled[-index,]
+
+# train neural network
+mod <- mlp(X.train, Y.train, size=9, maxit=75000)
+
+# combine and predict
+fit.df <- tibble(Y1=c(as.matrix(Y.train)),
+                 pred.m=c(as.matrix(mod$fitted.values)),
+                 LC=rep(1:6, each=nrow(Y.train)),
+                 Y2=c(as.matrix(cbind(X.train[,1:3], 
+                                      X.train[,4]*X.train[,6],
+                                      X.train[,4]*(1-X.train[,6]),
+                                      X.train[,5]))),
+                 BlockRow=rep(X$BlockRow[index], 6),
+                 BlockCol=rep(X$BlockCol[index], 6),
+                 Set="Y1+Y2") %>% 
+  bind_rows(tibble(Y1=c(as.matrix(Y.test)),
+                pred.m=c(predict(mod, X.test)),
+                LC=rep(1:6, each=nrow(Y.test)),
+                Y2=c(as.matrix(cbind(X.test[,1:3], 
+                                     X.test[,4]*X.test[,6],
+                                     X.test[,4]*(1-X.test[,6]),
+                                     X.test[,5]))),
+                BlockRow=rep(X$BlockRow[-index], 6),
+                BlockCol=rep(X$BlockCol[-index], 6),
+                Set="Y2"))
+
+# plots
+ggplot(fit.df, aes(x=Y1, y=Y2)) + geom_point(alpha=0.5) +
   xlim(0,1) + ylim(0,1) +
-  geom_abline(slope=1, colour="red", linetype=2) + facet_wrap(~LC)
-ggplot(pr.df, aes(x=Y1, y=Y2)) + geom_point(alpha=0.5) +
+  geom_abline(slope=1, colour="red", linetype=2) + facet_grid(Set~LC)
+ggplot(fit.df, aes(x=Y1, y=pred.m)) + geom_point(alpha=0.5) +
   xlim(0,1) + ylim(0,1) +
-  geom_abline(slope=1, colour="red", linetype=2) + facet_wrap(~LC)
-ggplot(pr.df, aes(x=Y1, xend=Y1, y=Y2, yend=pred.m2,
-                      colour=abs(Y2-Y1)<abs(pred.m2-Y1))) + 
-  geom_abline(slope=1, linetype=3) + facet_wrap(~LC) +
+  geom_abline(slope=1, colour="red", linetype=2) + facet_grid(Set~LC)
+ggplot(fit.df, aes(x=Y1, xend=Y1, y=Y2, yend=pred.m,
+                      colour=abs(Y2-Y1)<abs(pred.m-Y1))) + 
+  geom_abline(slope=1, linetype=3) + facet_grid(Set~LC) +
   scale_colour_manual(values=c("darkgreen", "red")) + xlim(0,1) + ylim(0,1) +
   geom_segment(arrow=arrow(length=unit(0.1, "cm")), alpha=0.4) + 
   labs(x="Y1", y="Y2 -> median") + theme(legend.position="none") 
-pr.df %>% group_by(LC) %>%
-  summarise(rmse.mod=(pred.m2-Y1)^2 %>% mean %>% sqrt %>% round(3),
+ggplot(fit.df, aes(x=BlockCol, y=BlockRow, fill=Y2-Y1)) + geom_tile() +
+  facet_wrap(~LC) + scale_fill_gradient2()
+
+fit.df %>% group_by(Set, LC) %>%
+  summarise(rmse.mod=(pred.m-Y1)^2 %>% mean %>% sqrt %>% round(3),
             rmse.Y2=(Y2-Y1)^2 %>% mean %>% sqrt %>% round(3),
             diff=rmse.mod-rmse.Y2, prop=(diff/rmse.Y2) %>% round(3))
+
 ```
 
 
