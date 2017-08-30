@@ -14,7 +14,8 @@ source("code/LC_fun.R"); source("code/stan_utilities.R")
 
 ```{r readData, message=FALSE}
 grdSz <- "01_1a"
-blockSize <- 15  # block = (blockSize x blockSize) grid cells
+blockSize <- 10  # block = (blockSize x blockSize) grid cells
+maxGridLen <- 25  # number of blocks to include per side: nBlocks = maxGridLen^2
 
 # cell-block reference tibble
 cb.i <- read_csv(paste0("data/roads_", grdSz, ".csv")) %>% 
@@ -26,45 +27,55 @@ cb.i <- read_csv(paste0("data/roads_", grdSz, ".csv")) %>%
          BlockCol=((CellCol-1)%/%blockSize)+1,
          BlockID=paste(BlockCol, BlockRow) %>% factor %>% as.numeric) %>%
   select(c(CellID, CellRow, CellCol, BlockID, BlockRow, BlockCol, left, top))
+Block.inc <- cb.i$BlockID[cb.i$BlockCol <= maxGridLen &
+                            cb.i$BlockRow <= maxGridLen] %>% unique
 
 # covariates summarized to blocks
 pop00 <- read_csv(paste0("data/pop00_", grdSz, ".csv")) %>% 
   rename(CellID=category) %>% 
-  add_blocks(cb.i=cb.i) %>% summarise(popTot=log(sum(sum)+0.001))
+  add_blocks(cb.i=cb.i) %>% summarise(popTot=log(sum(sum)+0.001)) %>%
+  filter(BlockID %in% Block.inc)
 hous00 <- read_csv(paste0("data/housing00_", grdSz, ".csv")) %>% 
   rename(CellID=category) %>% 
-  add_blocks(cb.i=cb.i) %>% summarise(secHome=log(sum(sum)+0.001))
+  add_blocks(cb.i=cb.i) %>% summarise(secHome=log(sum(sum)+0.001)) %>%
+  filter(BlockID %in% Block.inc)
 rdLen <- read_csv(paste0("data/roads_", grdSz, ".csv")) %>% 
-  add_blocks(cb.i=cb.i) %>% summarise(rdLen=log(sum(roadLen)+0.001)) 
+  add_blocks(cb.i=cb.i) %>% summarise(rdLen=log(sum(roadLen)+0.001))  %>%
+  filter(BlockID %in% Block.inc)
 clim <- read_csv(paste0("data/clim_", grdSz, ".csv")) %>% 
   add_blocks(cb.i=cb.i) %>% 
-  summarise(b1=mean(bio1_mean), b7=mean(bio7_mean), b12=mean(bio12_mean))
+  summarise(b1=mean(bio1_mean), b7=mean(bio7_mean), b12=mean(bio12_mean)) %>%
+  filter(BlockID %in% Block.inc)
 topo <- read_csv(paste0("data/topo_", grdSz, ".csv")) %>% 
   add_blocks(cb.i=cb.i) %>% 
-  summarise(el=mean(el_mean), rugg=mean(rugg_mean))
+  summarise(el=mean(el_mean), rugg=mean(rugg_mean)) %>%
+  filter(BlockID %in% Block.inc)
 pWP <- read_csv(paste0("data/pWP_", grdSz, ".csv")) %>% 
   rename(CellID=category) %>%
-  add_blocks(cb.i=cb.i) %>% summarise(mnWP=mean(mean)/100)
+  add_blocks(cb.i=cb.i) %>% summarise(mnWP=mean(mean)/100) %>%
+  filter(BlockID %in% Block.inc)
 
 # land cover summarized to blocks
 grnt <- read_csv(paste0("data/out_", grdSz, "_grnt.csv")) %>% 
   mutate(CellID=1:nrow(.)) %>% add_blocks(cb.i=cb.i) %>% 
   summarise(Dev=sum(V1)/n(), Oth=sum(V2)/n(), Hwd=sum(V3)/n(), 
             WP=sum(V4)/n(), Evg=sum(V5)/n(), Mxd=sum(V6)/n()) %>%
+  filter(BlockID %in% Block.inc) %>%
   select(-BlockID) %>% as.matrix
 nlcd <- read_csv(paste0("data/out_",grdSz,"_nlcd.csv"))  %>% 
   mutate(CellID=1:nrow(.)) %>% add_blocks(cb.i=cb.i) %>% 
   summarise(Dev=sum(V1)/n(), Oth=sum(V2)/n(), Hwd=sum(V3)/n(), 
             Evg=sum(V4)/n(), Mxd=sum(V5)/n()) %>%
+  filter(BlockID %in% Block.inc) %>%
   select(-BlockID) %>% as.matrix
 ```
 
 
 ```{r modelSetup}
 # small scale runs: set nCell for Y1&Y2 and Y2
-set.seed(2222)
-nFit <- 583
-nNew <- 389
+set.seed(22222)
+nFit <- 375
+nNew <- 250
 n <- sampleCells(nFit, nNew, nrow(grnt))
 
 # Y1 & Y2
@@ -78,14 +89,14 @@ Xd[[1]] <- cbind(scale(rdLen$rdLen[n$all]),
                  scale(pop00$popTot[n$all]),
                  scale(topo$el[n$all]))
 Xd[[2]] <- cbind(scale(rdLen$rdLen[n$all]),
-                 scale(pop00$popTot[n$all]))#,  #theta5, beta5
-#                  scale(clim$b7[n$all]))  #theta6, beta6
+                 scale(pop00$popTot[n$all]),  #theta5, beta5
+                 scale(clim$b7[n$all]))  #theta6, beta6
 Xd[[3]] <- cbind(scale(clim$b7[n$all]),
-                 scale(pop00$popTot[n$all]))#,   #theta8, beta8
-                 # scale(topo$el[n$all]))  #theta9, beta9
+                 scale(pop00$popTot[n$all]),   #theta8, beta8
+                 scale(topo$el[n$all]))  #theta9, beta9
 Xd[[4]] <- cbind(scale(clim$b1[n$all]),
-                 scale(clim$b12[n$all]))#,  #theta11, beta11
-#                  scale(pop00$popTot[n$all]))  #theta12, beta12
+                 scale(clim$b12[n$all]),  #theta11, beta11
+                 scale(pop00$popTot[n$all]))  #theta12, beta12
 nBd <- map_int(Xd, ncol)  # nBeta for each covariate
 
 # covariates: WP|Evg
@@ -119,12 +130,10 @@ b.rows <- cb.i$BlockRow[match(rdLen$BlockID[n$all], cb.i$BlockID)]
 b.cols <- cb.i$BlockCol[match(rdLen$BlockID[n$all], cb.i$BlockID)]
 coords <- data.frame(b.cols, b.rows)
 D <- as.matrix(dist(coords))
-# W <- as.matrix(dist(coords, diag=T, upper=T)) < 1.5
-# diag(W) <- 0
 
 # knots
-m.cols <- 10
-m.rows <- 6
+m.cols <- 4
+m.rows <- 4
 m <- m.rows * m.cols
 coords_star <- place_knots(m.cols, m.rows, coords)
 D_star <- as.matrix(dist(coords_star))
@@ -136,15 +145,17 @@ plot(coords, pch=20, col="gray40"); points(coords_star, pch=8, col="red")
 
 ```{r modelRun}
 d <- list(n1=nFit, n2=nFit+1, n3=n$tot, L=6, nB_d=nBd, nB_p=nBp,
-          Y1=Y1.fit[,-6], Y2=Y2[,-5], #W=W, W_n=sum(W)/2,
+          Y1=Y1.fit[,-6], Y2=Y2[,-5], 
           m=m, D_star=D_star, D_site_star=D_site_star,
           X_d1=Xd[[1]], X_d2=Xd[[2]], X_d3=Xd[[3]], X_d4=Xd[[4]], X_p=Xp)
 stan_rdump(ls(d), file="code/LC_mod_examp.Rdump", envir=list2env(d))
 out <- stan(file="code/LC_mod_Y2X_GPP.stan", init=0, thin=25,
             data=read_rdump("code/LC_mod_examp.Rdump"), 
-            iter=2000, warmup=1000, chains=4, seed=4337, refresh=10,
-            include=FALSE, pars=c("Y2_ds", "e_z", "w_z", "w", "w_star",
-                                  "Cstar", "C_site_inv_Cstar", "C_site_star"))
+            iter=2000, warmup=1000, chains=4, seed=4337, refresh=50,
+            include=FALSE, pars=c("Y2_ds", "Y2_ds_new", "sig_sq", "eta_sq",
+                                  "e_z", "w_z", "w", "w_star",
+                                  "Cstar", "C_site_inv_Cstar", "C_site_star"),
+            control=list(adapt_delta=0.9))
 check_treedepth(out); check_energy(out); check_div(out)
 sampler_params <- get_sampler_params(out, inc_warmup=FALSE)
 n_gradients <- sapply(sampler_params, function(x) sum(x[,'n_leapfrog__']))
@@ -162,7 +173,7 @@ gg.nu <- ggs(out, "n_eta") %>% arrange(Parameter, Chain, Iteration)
 nGG <- attr(gg.nu, "nChains")*attr(gg.nu, "nIterations")
 gg.nu %<>% mutate(Y1=t(rbind(Y1.fit, Y1.new)) %>% c %>% rep(each=nGG),
                   LC=1:6 %>% rep(each=nGG) %>% rep(times=n$tot),
-                  BlockID=n$all %>% rep(each=nGG*6),
+                  BlockID=pop00$BlockID[n$all] %>% rep(each=nGG*6),
                   CellID=1:length(n$all) %>% rep(each=nGG*6),
                   Set=c("Y1+Y2", "Y2") %>% rep(times=c(nFit, nNew)*nGG*6)) %>%
   mutate(BlockRow=cb.i$BlockRow[match(.$BlockID, cb.i$BlockID)], 
@@ -193,29 +204,28 @@ gg.EvgMed <- gg.EvgComb %>% group_by(CellID, BlockID, LC, Set) %>%
 
 ggplot(gg.EvgMed, aes(x=Y1, y=med)) + xlim(0,1) + ylim(0,1) + 
   geom_point(alpha=0.5) + facet_grid(Set~LC) + 
-  geom_abline(slope=1, linetype=2, colour="red") + ggtitle("Y2_X")
+  geom_abline(slope=1, linetype=2, colour="red")
 ggplot(gg.EvgMed, aes(x=Y1, y=Y2)) + xlim(0,1) + ylim(0,1) + 
   geom_point(alpha=0.5) + facet_grid(Set~LC) + 
-  geom_abline(slope=1, linetype=2, colour="red") + ggtitle("Y2_X") 
+  geom_abline(slope=1, linetype=2, colour="red")
 ggplot(gg.EvgMed, aes(x=Y2, y=med)) + xlim(0,1) + ylim(0,1) + 
   geom_point(alpha=0.5) + facet_grid(Set~LC) + 
-  geom_abline(slope=1, linetype=2, colour="red")  + ggtitle("Y2_X")
+  geom_abline(slope=1, linetype=2, colour="red")
 
 ggplot(gg.med, aes(x=Y1, y=med, ymin=q25, ymax=q75)) + xlim(0,1) + ylim(0,1) + 
   geom_pointrange(alpha=0.5, colour="dodgerblue", fatten=1.5) + 
-  geom_abline(slope=1, linetype=3) + facet_grid(Set~LC)  + ggtitle("Y2_X")
+  geom_abline(slope=1, linetype=3) + facet_grid(Set~LC) 
 ggplot(gg.EvgMed, aes(x=Y1, xend=Y1, y=Y2, yend=med,
                       colour=abs(Y2-Y1)<abs(med-Y1))) + 
   geom_abline(slope=1, linetype=3) + facet_grid(Set~LC) +
   scale_colour_manual(values=c("darkgreen", "red")) + xlim(0,1) + ylim(0,1) +
   geom_segment(arrow=arrow(length=unit(0.1, "cm")), alpha=0.4) + 
-  labs(x="Y1", y="Y2 -> median") + theme(legend.position="none") +
-  ggtitle("Y2_X")
+  labs(x="Y1", y="Y2 -> median") + theme(legend.position="none")
 
 ggplot(gg.med, aes(x=BlockCol, y=BlockRow)) + 
-  geom_tile(aes(fill=med-Y1)) + facet_grid(Set~LC) +
-  scale_fill_gradient2() + ggtitle("Y2_X") + 
-  geom_point(data=coords_star, aes(y=b.cols, x=b.rows), shape=1)
+  geom_tile(aes(fill=med-Y1, colour=Set)) + facet_grid(.~LC) +
+  scale_fill_gradient2() + scale_colour_manual(values=c("NA", "black")) +
+  geom_point(data=coords_star, aes(x=b.cols, y=b.rows), shape=1)
 
 
 ##########
@@ -252,7 +262,7 @@ ggs_crosscorrelation(gg.b)
 ggs_crosscorrelation(ggs(out, "theta"))
 sampler_params <- get_sampler_params(out, inc_warmup=FALSE) %>% do.call(rbind, .)
 samp.out <- cbind(sampler_params[,c(1,6)], extract(out, pars="lp__")[[1]], 
-                  extract(out, pars="L_sigma_unif")[[1]])
+                  extract(out, pars="L_sigma")[[1]])
 colnames(samp.out) <- c("accept_stat__", "energy__", "lp__", 
                         "L_sig1[1]", "L_sig1[2]", "L_sig1[3]", 
                         "L_sig1[4]", "L_sig1[5]")
