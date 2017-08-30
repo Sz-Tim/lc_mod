@@ -74,9 +74,9 @@ nlcd <- read_csv(paste0("data/out_",grdSz,"_nlcd.csv"))  %>%
 ```{r modelSetup}
 # small scale runs: set nCell for Y1&Y2 and Y2
 set.seed(22222)
-nFit <- 375
-nNew <- 250
-n <- sampleCells(nFit, nNew, nrow(grnt))
+nFit <- 38
+nNew <- 26
+n <- sampleCells(nFit, nNew, nrow(grnt), partition=TRUE)
 
 # Y1 & Y2
 Y1.fit <- grnt[n$fit,]
