@@ -6,8 +6,8 @@ output: html_document
 
 ```{r setup, include=FALSE}
 library(sevcheck); library(tidyverse); library(magrittr); theme_set(theme_bw())
-library(forcats); library(rstan); library(ggmcmc); library(mvtnorm)
-rstan_options(auto_write = TRUE); options(mc.cores = parallel::detectCores())
+library(forcats); library(rstan); library(ggmcmc); library(stringr)
+rstan_options(auto_write=TRUE); options(mc.cores=parallel::detectCores())
 source("code/LC_fun.R"); source("code/stan_utilities.R")
 ```
 
@@ -15,7 +15,7 @@ source("code/LC_fun.R"); source("code/stan_utilities.R")
 ```{r readData, message=FALSE}
 grdSz <- "01_1a"
 blockSize <- 10  # block = (blockSize x blockSize) grid cells
-maxGridLen <- 25  # number of blocks to include per side: nBlocks = maxGridLen^2
+maxGridLen <- 40  # number of blocks to include per side: nBlocks = maxGridLen^2
 
 # cell-block reference tibble
 cb.i <- read_csv(paste0("data/roads_", grdSz, ".csv")) %>% 
@@ -25,7 +25,9 @@ cb.i <- read_csv(paste0("data/roads_", grdSz, ".csv")) %>%
            (CellCol <= max((CellCol %/% blockSize) * blockSize))) %>%
   mutate(BlockRow=((CellRow-1)%/%blockSize)+1, 
          BlockCol=((CellCol-1)%/%blockSize)+1,
-         BlockID=paste(BlockCol, BlockRow) %>% factor %>% as.numeric) %>%
+         BlockID=paste(str_pad(BlockCol, 3, "left", "0"), 
+                       str_pad(BlockRow, 3, "left", "0"), sep=".") %>% 
+           as.numeric %>% factor %>% as.numeric) %>%
   select(c(CellID, CellRow, CellCol, BlockID, BlockRow, BlockCol, left, top))
 Block.inc <- cb.i$BlockID[cb.i$BlockCol <= maxGridLen &
                             cb.i$BlockRow <= maxGridLen] %>% unique
@@ -74,8 +76,8 @@ nlcd <- read_csv(paste0("data/out_",grdSz,"_nlcd.csv"))  %>%
 ```{r modelSetup}
 # small scale runs: set nCell for Y1&Y2 and Y2
 set.seed(22222)
-nFit <- 38
-nNew <- 26
+nFit <- 86
+nNew <- 58
 n <- sampleCells(nFit, nNew, nrow(grnt), partition=TRUE)
 
 # Y1 & Y2
@@ -124,7 +126,7 @@ cor(Yd)
 ```
 
 
-```{r spatialSetup}
+```{r spatialSetup, fig.width=5, fig.height=5}
 # block distances & adjacency
 b.rows <- cb.i$BlockRow[match(rdLen$BlockID[n$all], cb.i$BlockID)]
 b.cols <- cb.i$BlockCol[match(rdLen$BlockID[n$all], cb.i$BlockID)]
@@ -132,8 +134,8 @@ coords <- data.frame(b.cols, b.rows)
 D <- as.matrix(dist(coords))
 
 # knots
-m.cols <- 4
-m.rows <- 4
+m.cols <- 3
+m.rows <- 3
 m <- m.rows * m.cols
 coords_star <- place_knots(m.cols, m.rows, coords)
 D_star <- as.matrix(dist(coords_star))
@@ -154,8 +156,7 @@ out <- stan(file="code/LC_mod_Y2X_GPP.stan", init=0, thin=25,
             iter=2000, warmup=1000, chains=4, seed=4337, refresh=50,
             include=FALSE, pars=c("Y2_ds", "Y2_ds_new", "sig_sq", "eta_sq",
                                   "e_z", "w_z", "w", "w_star",
-                                  "Cstar", "C_site_inv_Cstar", "C_site_star"),
-            control=list(adapt_delta=0.9))
+                                  "Cstar", "C_site_inv_Cstar", "C_site_star"))
 check_treedepth(out); check_energy(out); check_div(out)
 sampler_params <- get_sampler_params(out, inc_warmup=FALSE)
 n_gradients <- sapply(sampler_params, function(x) sum(x[,'n_leapfrog__']))
