@@ -35,31 +35,23 @@ functions {
   
   vector tr_gjam_inv(vector w) {
     vector[6] eta;
+    vector[5] w_p_;
     real w_p;
     real D_i;
-    real ls_1;
-    int gr_1;
     
     eta[1:5] = w;
-    ls_1 = 0;
-    gr_1 = 0;
     
     for(l in 1:5) {  
-      if(eta[l] < 0) {
-        eta[l] = 0;
-      }
-      if(eta[l] < 1) {
-        ls_1 = ls_1 + eta[l];
-      } else {
-        gr_1 = gr_1 + 1;
-      }
+      if(eta[l] < 0)  eta[l] = 0; 
+      if(eta[l] < 1)  w_p_[l] = eta[l];
+      else  w_p_[l] = 1;
     }
-    w_p = ls_1 + gr_1;
+    w_p = sum(w_p_);
     
     if(w_p >= 0.99) {
-      vector[5] tmp;
       D_i = (w_p^(-1)) * (1 - (0.01)^(w_p/0.99));
       while(sum(eta[1:5]) > 0.99) {
+        vector[5] tmp;
         tmp = D_i * eta[1:5];
         eta[1:5] = tmp;
       }
