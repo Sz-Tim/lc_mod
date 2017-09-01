@@ -177,8 +177,7 @@ model {
   beta_d ~ normal(0, 0.1);
   
   //likelihood
-   Y1 ~ multi_normal_cholesky(Y2_, 
-                diag_pre_multiply(L_sigma, L_Omega));
+   Y1 ~ multi_normal_cholesky(Y2_, diag_pre_multiply(L_sigma, L_Omega));
 }
 
 generated quantities {
