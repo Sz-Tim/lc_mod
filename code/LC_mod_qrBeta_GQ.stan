@@ -86,7 +86,7 @@ parameters {
 
 transformed parameters {
   //NLCD de-biasing and splitting
-  vector[L-1] Y2_ds[n1];  
+  vector[L-1] Y2_[n1];  
   //betas
   vector[nB_p] beta_p;  //pr(WP|Evg) betas
   vector[n_beta_d] beta_d;  //bias betas
@@ -102,12 +102,12 @@ transformed parameters {
   
   //correct bias & split WP to [,4] and Evg to [,5]
   ////fit betas using cells with Y1 & Y2
-  Y2_ds[1:n1,1] = to_array_1d(Y2[1:n1,1] + (Q_d1[1:n1,] * theta_d[1:d1_2]));
-  Y2_ds[1:n1,2] = to_array_1d(Y2[1:n1,2] + (Q_d2[1:n1,] * theta_d[d2_1:d2_2]));
-  Y2_ds[1:n1,3] = to_array_1d(Y2[1:n1,3] + (Q_d3[1:n1,] * theta_d[d3_1:d3_2]));
-  Y2_ds[1:n1,4] = to_array_1d((Y2[1:n1,4] + (Q_d4[1:n1,] * theta_d[d4_1:d4_2])) 
+  Y2_[1:n1,1] = to_array_1d(Y2[1:n1,1] + (Q_d1[1:n1,] * theta_d[1:d1_2]));
+  Y2_[1:n1,2] = to_array_1d(Y2[1:n1,2] + (Q_d2[1:n1,] * theta_d[d2_1:d2_2]));
+  Y2_[1:n1,3] = to_array_1d(Y2[1:n1,3] + (Q_d3[1:n1,] * theta_d[d3_1:d3_2]));
+  Y2_[1:n1,4] = to_array_1d((Y2[1:n1,4] + (Q_d4[1:n1,] * theta_d[d4_1:d4_2])) 
       .* inv_logit(Q_p[1:n1,] * theta_p));
-  Y2_ds[1:n1,5] = to_array_1d((Y2[1:n1,4] + (Q_d4[1:n1,] * theta_d[d4_1:d4_2])) 
+  Y2_[1:n1,5] = to_array_1d((Y2[1:n1,4] + (Q_d4[1:n1,] * theta_d[d4_1:d4_2])) 
       .* (1-inv_logit(Q_p[1:n1,] * theta_p)));
 }
 
@@ -129,27 +129,27 @@ model {
   //likelihood
    Y1 ~ multi_normal_cholesky(nu, 
                 diag_pre_multiply(2.5 * tan(L_sigma_unif[1]), L_Omega[1]));
-   Y2_ds ~ multi_normal_cholesky(nu,
+   Y2_ ~ multi_normal_cholesky(nu,
                 diag_pre_multiply(2.5 * tan(L_sigma_unif[2]), L_Omega[2]));
 }
 
 generated quantities {
   //landcover: latent compositional
   simplex[L] n_eta[n3];  //gjam transformed nu
-  vector[L-1] Y2_new[n3-n1];  //unbiased, split NLCD
+  vector[L-1] Y2new_[n3-n1];  //unbiased, split NLCD
   
-  Y2_new[,1] = to_array_1d(Y2[n2:n3,1] + (Q_d1[n2:n3,] * theta_d[1:d1_2]));
-  Y2_new[,2] = to_array_1d(Y2[n2:n3,2] + (Q_d2[n2:n3,] * theta_d[d2_1:d2_2]));
-  Y2_new[,3] = to_array_1d(Y2[n2:n3,3] + (Q_d3[n2:n3,] * theta_d[d3_1:d3_2]));
-  Y2_new[,4] = to_array_1d((Y2[n2:n3,4] + (Q_d4[n2:n3,] * theta_d[d4_1:d4_2])) 
+  Y2new_[,1] = to_array_1d(Y2[n2:n3,1] + (Q_d1[n2:n3,] * theta_d[1:d1_2]));
+  Y2new_[,2] = to_array_1d(Y2[n2:n3,2] + (Q_d2[n2:n3,] * theta_d[d2_1:d2_2]));
+  Y2new_[,3] = to_array_1d(Y2[n2:n3,3] + (Q_d3[n2:n3,] * theta_d[d3_1:d3_2]));
+  Y2new_[,4] = to_array_1d((Y2[n2:n3,4] + (Q_d4[n2:n3,] * theta_d[d4_1:d4_2])) 
       .* inv_logit(Q_p[n2:n3,] * theta_p));
-  Y2_new[,5] = to_array_1d((Y2[n2:n3,4] + (X_d4[n2:n3,] * theta_d[d4_1:d4_2])) 
+  Y2new_[,5] = to_array_1d((Y2[n2:n3,4] + (X_d4[n2:n3,] * theta_d[d4_1:d4_2])) 
       .* (1-inv_logit(Q_p[n2:n3,] * theta_p)));
   
   for(n in 1:n1) {
     n_eta[n] = tr_gjam_inv(nu[n]);
   }
   for(n in n2:n3) {
-    n_eta[n] = tr_gjam_inv(Y2_new[n-n1]);
+    n_eta[n] = tr_gjam_inv(Y2new_[n-n1]);
   }
 }

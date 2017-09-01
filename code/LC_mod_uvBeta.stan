@@ -80,7 +80,7 @@ parameters {
 
 transformed parameters {
   //NLCD de-biasing and splitting
-  vector[L-1] Y2_ds[n3];  //unbiased, split NLCD
+  vector[L-1] Y2_[n3];  //unbiased, split NLCD
   //betas
   vector[n_beta_d] beta_d;  //bias betas
 
@@ -91,16 +91,16 @@ transformed parameters {
   
   //correct bias & split WP to [,4] and Evg to [,5]
   ////fit betas using cells with Y1 & Y2
-  Y2_ds[1:n1,1] = to_array_1d(Y2[1:n1,1] 
+  Y2_[1:n1,1] = to_array_1d(Y2[1:n1,1] 
       + (X_d1[1:n1,] * beta_d[1:d1_2]));
-  Y2_ds[1:n1,2] = to_array_1d(Y2[1:n1,2] 
+  Y2_[1:n1,2] = to_array_1d(Y2[1:n1,2] 
       + (X_d2[1:n1,] * beta_d[d2_1:d2_2]));
-  Y2_ds[1:n1,3] = to_array_1d(Y2[1:n1,3] 
+  Y2_[1:n1,3] = to_array_1d(Y2[1:n1,3] 
       + (X_d3[1:n1,] * beta_d[d3_1:d3_2]));
-  Y2_ds[1:n1,4] = to_array_1d((Y2[1:n1,4] 
+  Y2_[1:n1,4] = to_array_1d((Y2[1:n1,4] 
       + (X_d4[1:n1,] * beta_d[d4_1:d4_2])) 
       .* inv_logit(X_p[1:n1,] * beta_p));
-  Y2_ds[1:n1,5] = to_array_1d((Y2[1:n1,4] 
+  Y2_[1:n1,5] = to_array_1d((Y2[1:n1,4] 
       + (X_d4[1:n1,] * beta_d[d4_1:d4_2])) 
       .* (1-inv_logit(X_p[1:n1,] * beta_p)));
   ////correct for bias in cells with only Y2 using fit betas
@@ -109,16 +109,16 @@ transformed parameters {
     vector[nB_p] b_p;
     b_d = beta_d;
     b_p = beta_p;
-    Y2_ds[n2:n3,1] = to_array_1d(Y2[n2:n3,1] 
+    Y2_[n2:n3,1] = to_array_1d(Y2[n2:n3,1] 
         + (X_d1[n2:n3,] * b_d[1:d1_2]));
-    Y2_ds[n2:n3,2] = to_array_1d(Y2[n2:n3,2] 
+    Y2_[n2:n3,2] = to_array_1d(Y2[n2:n3,2] 
         + (X_d2[n2:n3,] * b_d[d2_1:d2_2]));
-    Y2_ds[n2:n3,3] = to_array_1d(Y2[n2:n3,3] 
+    Y2_[n2:n3,3] = to_array_1d(Y2[n2:n3,3] 
         + (X_d3[n2:n3,] * b_d[d3_1:d3_2]));
-    Y2_ds[n2:n3,4] = to_array_1d((Y2[n2:n3,4] 
+    Y2_[n2:n3,4] = to_array_1d((Y2[n2:n3,4] 
         + (X_d4[n2:n3,] * b_d[d4_1:d4_2])) 
         .* inv_logit(X_p[n2:n3,] * b_p));
-    Y2_ds[n2:n3,5] = to_array_1d((Y2[n2:n3,4] 
+    Y2_[n2:n3,5] = to_array_1d((Y2[n2:n3,4] 
         + (X_d4[n2:n3,] * b_d[d4_1:d4_2])) 
         .* (1-inv_logit(X_p[n2:n3,] * b_p)));
   }
@@ -145,7 +145,7 @@ model {
   //likelihood
    Y1 ~ multi_normal_cholesky(nu[1:n1], 
                 diag_pre_multiply(2.5 * tan(L_sigma_unif[1]), L_Omega[1]));
-   Y2_ds ~ multi_normal_cholesky(nu,
+   Y2_ ~ multi_normal_cholesky(nu,
                 diag_pre_multiply(2.5 * tan(L_sigma_unif[2]), L_Omega[2]));
 }
 

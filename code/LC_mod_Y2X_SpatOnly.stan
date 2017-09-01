@@ -68,7 +68,7 @@ parameters {
 
 transformed parameters {
   //NLCD de-biasing and splitting
-  vector[L-1] Y2_ds[n1];
+  vector[L-1] Y2_[n1];
   vector[nB_p] beta_p;
   //GPP
   vector[n3] w[L-1];
@@ -107,16 +107,16 @@ transformed parameters {
   beta_p = R_inv_p * theta_p;
 
   //split and de-bias Y2
-  Y2_ds[,1] = to_array_1d(to_vector(Y2[1:n1,1]) 
+  Y2_[,1] = to_array_1d(to_vector(Y2[1:n1,1]) 
       + w[1,1:n1]);
-  Y2_ds[,2] = to_array_1d(to_vector(Y2[1:n1,2]) 
+  Y2_[,2] = to_array_1d(to_vector(Y2[1:n1,2]) 
       + w[2,1:n1]);
-  Y2_ds[,3] = to_array_1d(to_vector(Y2[1:n1,3]) 
+  Y2_[,3] = to_array_1d(to_vector(Y2[1:n1,3]) 
       + w[3,1:n1]);
-  Y2_ds[,4] = to_array_1d(to_vector(Y2[1:n1,4]) 
+  Y2_[,4] = to_array_1d(to_vector(Y2[1:n1,4]) 
         .* inv_logit(Q_p[1:n1] * theta_p)
       + w[4,1:n1]);
-  Y2_ds[,5] = to_array_1d(to_vector(Y2[1:n1,4]) 
+  Y2_[,5] = to_array_1d(to_vector(Y2[1:n1,4]) 
         .* (1 - inv_logit(Q_p[1:n1] * theta_p))
       + w[5,1:n1]);  
 }
@@ -139,32 +139,32 @@ model {
   beta_p ~ normal(0, 1);
   
   //likelihood
-   Y1 ~ multi_normal_cholesky(Y2_ds, 
+   Y1 ~ multi_normal_cholesky(Y2_, 
                 diag_pre_multiply(L_sigma, L_Omega));
 }
 
 generated quantities {
   //landcover: latent compositional
-  vector[L-1] Y2_ds_new[n3-n1];
+  vector[L-1] Y2new_[n3-n1];
   simplex[L] n_eta[n3];
 
-  Y2_ds_new[,1] = to_array_1d(to_vector(Y2[n2:n3,1])
+  Y2new_[,1] = to_array_1d(to_vector(Y2[n2:n3,1])
       + w[1,n2:n3]);
-  Y2_ds_new[,2] = to_array_1d(to_vector(Y2[n2:n3,2])
+  Y2new_[,2] = to_array_1d(to_vector(Y2[n2:n3,2])
       + w[2,n2:n3]);
-  Y2_ds_new[,3] = to_array_1d(to_vector(Y2[n2:n3,3])
+  Y2new_[,3] = to_array_1d(to_vector(Y2[n2:n3,3])
       + w[3,n2:n3]);
-  Y2_ds_new[,4] = to_array_1d(to_vector(Y2[n2:n3,4])
+  Y2new_[,4] = to_array_1d(to_vector(Y2[n2:n3,4])
         .* inv_logit(Q_p[n2:n3] * theta_p)
       + w[4,n2:n3]);
-  Y2_ds_new[,5] = to_array_1d(to_vector(Y2[n2:n3,4])
+  Y2new_[,5] = to_array_1d(to_vector(Y2[n2:n3,4])
         .* (1 - inv_logit(Q_p[n2:n3] * theta_p))
       + w[5,n2:n3]);
 
   for(n in 1:n1) {
-    n_eta[n] = tr_gjam_inv(Y2_ds[n]);
+    n_eta[n] = tr_gjam_inv(Y2_[n]);
   }
   for(n in n2:n3) {
-    n_eta[n] = tr_gjam_inv(Y2_ds_new[n-n1]);
+    n_eta[n] = tr_gjam_inv(Y2new_[n-n1]);
   }
 }
