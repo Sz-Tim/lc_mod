@@ -77,7 +77,7 @@ transformed data {
 parameters {
   //landcover: covariance
   cholesky_factor_corr[L-1] L_Omega; 
-  vector<lower=0, upper=pi()/2>[L-1] L_sigma_unif;  
+  vector<lower=0>[L-1] L_sigma;  
   //betas
   vector[nB_p] theta_p;  //pr(WP|Evg) betas (QR decomposition)
   vector[n_beta_d] theta_d;  //bias betas (QR decomposition)
@@ -116,14 +116,14 @@ transformed parameters {
 model {
   //covariance priors
   L_Omega ~ lkj_corr_cholesky(8);
+  L_sigma ~ normal(0, 1);
   
   //beta priors
   beta_p ~ normal(0, 1);
   beta_d ~ normal(0, 0.1);
   
   //likelihood
-   Y1 ~ multi_normal_cholesky(Y2_, 
-                diag_pre_multiply(2.5 * tan(L_sigma_unif), L_Omega));
+   Y1 ~ multi_normal_cholesky(Y2_, diag_pre_multiply(L_sigma, L_Omega));
 }
 
 generated quantities {
