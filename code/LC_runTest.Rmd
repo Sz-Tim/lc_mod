@@ -25,8 +25,8 @@ cb.i <- read_csv(paste0("data/roads_", grdSz, ".csv")) %>%
            (CellCol <= max((CellCol %/% blockSize) * blockSize))) %>%
   mutate(BlockRow=((CellRow-1)%/%blockSize)+1, 
          BlockCol=((CellCol-1)%/%blockSize)+1,
-         BlockID=paste(str_pad(BlockCol, 3, "left", "0"), 
-                       str_pad(BlockRow, 3, "left", "0"), sep=".") %>% 
+         BlockID=paste(str_pad(BlockCol, 7, "left", "0"), 
+                       str_pad(BlockRow, 7, "left", "0"), sep=".") %>% 
            as.numeric %>% factor %>% as.numeric) %>%
   select(c(CellID, CellRow, CellCol, BlockID, BlockRow, BlockCol, left, top))
 Block.inc <- cb.i$BlockID[cb.i$BlockCol <= maxGridLen &
