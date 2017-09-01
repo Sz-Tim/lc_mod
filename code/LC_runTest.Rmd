@@ -5,10 +5,10 @@ output: html_document
 ---
 
 ```{r setup, include=FALSE}
-library(sevcheck); library(tidyverse); library(magrittr); theme_set(theme_bw())
-library(forcats); library(rstan); library(ggmcmc); library(stringr)
+library(sevcheck); library(pacman)
+p_load("tidyverse", "magrittr", "forcats", "rstan", "ggmcmc", "stringr")
 rstan_options(auto_write=TRUE); options(mc.cores=parallel::detectCores())
-source("code/LC_fun.R"); source("code/stan_utilities.R")
+source("code/LC_fun.R"); source("code/stan_utilities.R"); theme_set(theme_bw())
 ```
 
 
