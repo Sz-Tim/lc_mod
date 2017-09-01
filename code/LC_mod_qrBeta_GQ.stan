@@ -76,7 +76,7 @@ transformed data {
 parameters {
   //landcover: covariance
   cholesky_factor_corr[L-1] L_Omega[2];
-  vector<lower=0, upper=pi()/2>[L-1] L_sigma_unif[2];
+  vector<lower=0>[L-1] L_sigma[2];
   //landcover: latent not constrained to be compositional
   vector[L-1] nu[n1];
   //thetas: QR decomposition slopes
@@ -115,6 +115,7 @@ model {
   //covariance priors
   for(j in 1:2) {
     L_Omega[j] ~ lkj_corr_cholesky(8);
+    L_sigma[j] ~ normal(0, 1);
   }
  
   //nu priors
@@ -127,10 +128,8 @@ model {
   beta_d ~ normal(0, 0.1);
   
   //likelihood
-   Y1 ~ multi_normal_cholesky(nu, 
-                diag_pre_multiply(2.5 * tan(L_sigma_unif[1]), L_Omega[1]));
-   Y2_ ~ multi_normal_cholesky(nu,
-                diag_pre_multiply(2.5 * tan(L_sigma_unif[2]), L_Omega[2]));
+   nu ~ multi_normal_cholesky(Y1, diag_pre_multiply(L_sigma[1], L_Omega[1]));
+   nu ~ multi_normal_cholesky(Y2_, diag_pre_multiply(L_sigma[2], L_Omega[2]));
 }
 
 generated quantities {
