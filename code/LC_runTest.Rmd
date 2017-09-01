@@ -237,12 +237,15 @@ gg.EvgMed %>% ungroup %>% group_by(Set, LC) %>%
             diff=rmse.mod-rmse.Y2, prop=(diff/rmse.Y2) %>% round(3))
 ```
 
+
 ```{r spatialError, fig.width=15, fig.height=3}
 ggplot(gg.med, aes(x=BlockCol, y=BlockRow)) + 
   geom_tile(aes(fill=med-Y1, colour=Set)) + facet_grid(.~LC) +
-  scale_fill_gradient2() + scale_colour_manual(values=c("NA", "black")) +
+  scale_fill_gradient2(limits=c(-1, 1)) + 
+  scale_colour_manual(values=c("NA", "gray30")) +
   geom_point(data=coords_star, aes(x=b.cols, y=b.rows), shape=1)
 ```
+
 
 ```{r outBeta}
 gg.b <- ggs(out, "beta")
