@@ -6,7 +6,7 @@ output: html_document
 ---
 
 ```{r setup, include=FALSE}
-library(sevcheck); library(pacman)
+library(sevcheck)
 p_load("tidyverse", "magrittr", "forcats", "neuralnet", "RSNNS")
 source("code/LC_fun.R"); theme_set(theme_bw())
 ```
