@@ -69,7 +69,6 @@ parameters {
 transformed parameters {
   //NLCD de-biasing and splitting
   vector[L-1] Y2_ds[n1];
-  //betas
   vector[nB_p] beta_p;
   //GPP
   vector[n3] w[L-1];
@@ -103,10 +102,11 @@ transformed parameters {
             .* sqrt(eta_sq[l] + sig_sq[l]
                     - rows_dot_product(C_site_inv_Cstar[l], C_site_star[l])));
   }  
+  
   //QR decompositions
   beta_p = R_inv_p * theta_p;
-  
 
+  //split and de-bias Y2
   Y2_ds[,1] = to_array_1d(to_vector(Y2[1:n1,1]) 
       + w[1,1:n1]);
   Y2_ds[,2] = to_array_1d(to_vector(Y2[1:n1,2]) 
