@@ -131,11 +131,11 @@ cor(Yd)
 b.rows <- cb.i$BlockRow[match(rdLen$BlockID[n$all], cb.i$BlockID)]
 b.cols <- cb.i$BlockCol[match(rdLen$BlockID[n$all], cb.i$BlockID)]
 coords <- data.frame(b.cols, b.rows)
-D <- as.matrix(dist(coords))
+#D <- as.matrix(dist(coords))
 
 # knots
-m.cols <- 4
-m.rows <- 4
+m.cols <- 5
+m.rows <- 5
 m <- m.rows * m.cols
 coords_star <- place_knots(m.cols, m.rows, coords)
 D_star <- as.matrix(dist(coords_star))
@@ -151,10 +151,10 @@ d <- list(n1=nFit, n2=nFit+1, n3=n$tot, L=6, nB_d=nBd, nB_p=nBp,
           m=m, D_star=D_star, D_site_star=D_site_star,
           X_d1=Xd[[1]], X_d2=Xd[[2]], X_d3=Xd[[3]], X_d4=Xd[[4]], X_p=Xp)
 stan_rdump(ls(d), file="code/LC_mod_examp.Rdump", envir=list2env(d))
-out <- stan(file="code/LC_mod_Y2X.stan", init=0, thin=25,
+out <- stan(file="code/LC_mod_Y2X_SpatOnly.stan", init=0, thin=25,
             data=read_rdump("code/LC_mod_examp.Rdump"), 
-            iter=20000, warmup=10000, chains=4, seed=4337, refresh=100,
-            include=FALSE, pars=c("Y2_ds", "Y2_ds_new", "sig_sq", "eta_sq",
+            iter=5000, warmup=2000, chains=4, seed=4337, refresh=100,
+            include=FALSE, pars=c("Y2_", "Y2new_", "sig_sq", "eta_sq",
                                   "e_z", "w_z", "w", "w_star",
                                   "Cstar", "C_site_inv_Cstar", "C_site_star"))
 check_treedepth(out); check_energy(out); check_div(out)
