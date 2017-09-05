@@ -92,3 +92,72 @@ place_knots <- function(mx, my, coords) {
 
 
 
+##########
+## NNGP setup
+##########
+
+i_index <- function(i, s, M) {
+  require(fields)
+  if(M >= (i - 1)) {im <- 1:(i - 1)}
+  else 	{
+    dist <- rdist(s[c(1,i),], s[c(1:(i-1)), ])[-1,]
+    im <- sort(order(dist)[1:M])
+  }
+  return(im)
+}
+
+
+
+i_dist <- function(i, neighbor_index, s) {
+  dist(s[c(i, neighbor_index[[i - 1]]), ])
+}
+
+
+
+get_index_dist <- function(s, M) {
+  
+  n = nrow(s)
+  M = min(M, n-1)
+  # get index of neighborhood
+  neighbor_index <- sapply(2:n, i_index, s, M)
+  # get distance matrix for each i
+  neighbor_dist <- sapply(2:n, i_dist, neighbor_index, s)
+  
+  return(list(i = neighbor_index, d = neighbor_dist))
+}
+
+
+
+get_neardistM <- function (ind, ind_distM_d) {
+  if (ind < M ){l = ind } else {l = M}; 
+  M_i <- rep(0, M * (M - 1) / 2);
+  if (l == 1) {}
+  else{
+    M_i[1: (l * (l - 1) / 2)] <- 
+      c(ind_distM_d[[ind]])[(l + 1): (l * (l + 1) / 2)]
+  }
+  return(M_i)
+}
+
+
+
+get_neardist <- function (ind, ind_distM_d) {
+  if (ind < M ){l = ind } else {l = M}; 
+  D_i <- rep(0, M);
+  D_i[1:l]<-c(ind_distM_d[[ind]])[1:l]
+  return( D_i)
+}
+
+
+
+get_nearind <- function (ind, ind_distM_i) {
+  if (ind < M ){l = ind } else {l = M}; 
+  D_i <- rep(0, M);
+  D_i[1:l]<-c(ind_distM_i[[ind]])[1:l]
+  return( D_i)
+}
+
+
+
+
+
