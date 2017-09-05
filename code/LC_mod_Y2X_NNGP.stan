@@ -53,8 +53,7 @@ functions {
       
       out_[i] = - 0.5 * log(V[i]) - 0.5 / sigmasq * (Uw[i] * Uw[i] / V[i]);
     } //close i
-    out = sum(out_);
-    out = out - 0.5 * N * log(sigmasq);
+    out = sum(out_) - 0.5 * N * log(sigmasq);
     return out;
   }
   
@@ -122,7 +121,7 @@ parameters {
   vector<lower=0>[L-1] L_sigma; 
   //betas
   vector[nB_p] theta_p;  //pr(WP|Evg) betas (QR decomposition)
-  //GPP
+  //NNGP
   real<lower=0> sigma[L-1];  //sqrt(nugget)
   real<lower=0> phi[L-1];  //decay rate
   vector[n3] w[L-1];  //spatial effects
@@ -152,7 +151,7 @@ transformed parameters {
 }
 
 model {
-  //gpp
+  //NNGP
   sigma ~ normal(0, 1);
   phi ~ normal(0, 1);
   for(l in 1:(L-1)) {
