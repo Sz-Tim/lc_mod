@@ -198,96 +198,9 @@ plot(coords, pch=20, col="gray40"); points(coords_star, pch=8, col="red")
 M <- 9
 coords.m <- as.matrix(coords[order(coords[,1]),])
 ind_distM <- get_index_dist(coords.m, M)
-```
-
-```
-## Loading required package: fields
-```
-
-```
-## Warning: package 'fields' was built under R version 3.4.1
-```
-
-```
-## Loading required package: spam
-```
-
-```
-## Warning: package 'spam' was built under R version 3.4.1
-```
-
-```
-## Loading required package: dotCall64
-```
-
-```
-## Warning: package 'dotCall64' was built under R version 3.4.1
-```
-
-```
-## Loading required package: grid
-```
-
-```
-## Spam version 2.1-1 (2017-07-02) is loaded.
-## Type 'help( Spam)' or 'demo( spam)' for a short introduction 
-## and overview of this package.
-## Help for individual functions is also obtained by adding the
-## suffix '.spam' to the function name, e.g. 'help( chol.spam)'.
-```
-
-```
-## 
-## Attaching package: 'spam'
-```
-
-```
-## The following objects are masked from 'package:base':
-## 
-##     backsolve, forwardsolve
-```
-
-```
-## Loading required package: maps
-```
-
-```
-## Warning: package 'maps' was built under R version 3.4.1
-```
-
-```
-## 
-## Attaching package: 'maps'
-```
-
-```
-## The following object is masked from 'package:purrr':
-## 
-##     map
-```
-
-```r
 neardistM <- sapply(1:(n$tot-1), get_neardistM, ind_distM$d)
-```
-
-```
-## Error in FUN(X[[i]], ...): object 'M' not found
-```
-
-```r
 neardist <- sapply(1:(n$tot-1), get_neardist, ind_distM$d)
-```
-
-```
-## Error in FUN(X[[i]], ...): object 'M' not found
-```
-
-```r
 nearind <- sapply(1:(n$tot-1), get_nearind, ind_distM$i)
-```
-
-```
-## Error in FUN(X[[i]], ...): object 'M' not found
 ```
 
 
@@ -299,25 +212,7 @@ d <- list(n1=nFit, n2=nFit+1, n3=n$tot, L=6, nB_d=nBd, nB_p=nBp,
           m=m, D_star=D_star, D_site_star=D_site_star,
           M=M, nearind=t(nearind), neardist=t(neardist), neardistM=t(neardistM), 
           X_d1=Xd[[1]], X_d2=Xd[[2]], X_d3=Xd[[3]], X_d4=Xd[[4]], X_p=Xp)
-```
-
-```
-## Error in t(nearind): object 'nearind' not found
-```
-
-```r
 stan_rdump(ls(d), file="code/LC_mod_examp.Rdump", envir=list2env(d))
-```
-
-```
-## Warning in ls(d): 'd' converted to character string
-```
-
-```
-## Error in as.environment(pos): no item called "d" on the search list
-```
-
-```r
 out <- stan(file="code/LC_mod_Y2X_NNGP.stan", init=0, thin=25,
             data=read_rdump("code/LC_mod_examp.Rdump"), 
             iter=5000, warmup=2000, chains=4, seed=4337, refresh=200,
@@ -339,7 +234,7 @@ out <- stan(file="code/LC_mod_Y2X_NNGP.stan", init=0, thin=25,
 ##                  from C:/Users/tms1044/Documents/R/win-library/3.4/StanHeaders/include/stan/math/rev/mat.hpp:4,
 ##                  from C:/Users/tms1044/Documents/R/win-library/3.4/StanHeaders/include/stan/math.hpp:4,
 ##                  from C:/Users/tms1044/Documents/R/win-library/3.4/StanHeaders/include/src/stan/model/model_header.hpp:4,
-##                  from file2ad6c9ee2a60.cpp:8:
+##                  from file2ad6c2afc5a68.cpp:8:
 ## C:/Users/tms1044/Documents/R/win-library/3.4/BH/include/boost/config/compiler/gcc.hpp:186:0: warning: "BOOST_NO_CXX11_RVALUE_REFERENCES" redefined
 ##  #  define BOOST_NO_CXX11_RVALUE_REFERENCES
 ##  ^
@@ -348,16 +243,7 @@ out <- stan(file="code/LC_mod_Y2X_NNGP.stan", init=0, thin=25,
 ```
 
 ```
-## Loading required namespace: rstudioapi
-```
-
-```
-## Warning: There were 36 divergent transitions after warmup. Increasing adapt_delta above 0.8 may help. See
-## http://mc-stan.org/misc/warnings.html#divergent-transitions-after-warmup
-```
-
-```
-## Warning: There were 4 transitions after warmup that exceeded the maximum treedepth. Increase max_treedepth above 10. See
+## Warning: There were 1 transitions after warmup that exceeded the maximum treedepth. Increase max_treedepth above 10. See
 ## http://mc-stan.org/misc/warnings.html#maximum-treedepth-exceeded
 ```
 
@@ -375,13 +261,12 @@ check_treedepth(out); check_energy(out); check_div(out)
 ```
 
 ```
-## [1] "4 of 480 iterations saturated the maximum tree depth of 10 (0.833333333333333%)"
+## [1] "1 of 480 iterations saturated the maximum tree depth of 10 (0.208333333333333%)"
 ## [1] "Run again with max_depth set to a larger value to avoid saturation"
 ```
 
 ```
-## [1] "36 of 480 iterations ended with a divergence (7.5%)"
-## [1] "Try running with larger adapt_delta to remove the divergences"
+## [1] "0 of 480 iterations ended with a divergence (0%)"
 ```
 
 ```r
@@ -391,11 +276,11 @@ n_gradients; sum(n_gradients)
 ```
 
 ```
-## [1]  8694  8868  7977 63624
+## [1] 24072 18888 18952 12680
 ```
 
 ```
-## [1] 89163
+## [1] 74592
 ```
 
 ```r
@@ -403,11 +288,11 @@ get_elapsed_time(out)
 ```
 
 ```
-##          warmup  sample
-## chain:1 2175.67 1735.99
-## chain:2 2256.73 1836.24
-## chain:3 1851.40 1670.26
-## chain:4 2333.69 9023.65
+##          warmup   sample
+## chain:1 5706.76 10325.90
+## chain:2 5385.71  8669.48
+## chain:3 5384.98  8365.23
+## chain:4 4961.76  6040.57
 ```
 
 
@@ -427,13 +312,7 @@ gg.nu %<>% mutate(Y1=t(rbind(Y1.fit, Y1.new)) %>% c %>% rep(each=nGG),
                   Set=c("Y1+Y2", "Y2") %>% rep(times=c(nFit, nNew)*nGG*6)) %>%
   mutate(BlockRow=cb.i$BlockRow[match(.$BlockID, cb.i$BlockID)], 
          BlockCol=cb.i$BlockCol[match(.$BlockID, cb.i$BlockID)])
-```
 
-```
-## Error in mutate_impl(.data, dots): Column `Y1` must be length 288000 (the number of rows) or one, not 648000
-```
-
-```r
 # Medians
 gg.med <- gg.nu %>% 
   group_by(CellID, BlockID, BlockRow, BlockCol, LC, Set, Parameter) %>%
@@ -441,42 +320,18 @@ gg.med <- gg.nu %>%
             q05=quantile(value, 0.05), q25=quantile(value, 0.25),
             q75=quantile(value, 0.75), q95=quantile(value, 0.95)) %>%
   ungroup() %>% group_by(BlockID)
-```
 
-```
-## Error in grouped_df_impl(data, unname(vars), drop): Column `CellID` is unknown
-```
-
-```r
 # Combine WP + Evg to compare to Y2
 gg.EvgComb <- gg.nu
 gg.EvgComb$LC[gg.EvgComb$LC==5] <- 4
-```
-
-```
-## Warning: Unknown or uninitialised column: 'LC'.
-
-## Warning: Unknown or uninitialised column: 'LC'.
-```
-
-```
-## Error in `$<-.data.frame`(`*tmp*`, LC, value = numeric(0)): replacement has 0 rows, data has 288000
-```
-
-```r
 gg.EvgMed <- gg.EvgComb %>% group_by(CellID, BlockID, LC, Set) %>%
   summarise(med=median(value), Y1=first(Y1), 
             q05=quantile(value, 0.05), q25=quantile(value, 0.25),
             q75=quantile(value, 0.75), q95=quantile(value, 0.95)) %>%
   arrange(CellID, LC) %>%
   ungroup %>% mutate(Y2=t(Y2) %>% c)
-```
 
-```
-## Error in grouped_df_impl(data, unname(vars), drop): Column `CellID` is unknown
-```
 
-```r
 ##########
 ## plots
 ##########
@@ -486,9 +341,7 @@ ggplot(gg.EvgMed, aes(x=Y1, y=med)) + xlim(0,1) + ylim(0,1) +
   geom_abline(slope=1, linetype=2, colour="red")
 ```
 
-```
-## Error in ggplot(gg.EvgMed, aes(x = Y1, y = med)): object 'gg.EvgMed' not found
-```
+![plot of chunk outNu](LC_runTest/outNu-1.png)
 
 ```r
 ggplot(gg.EvgMed, aes(x=Y1, y=Y2)) + xlim(0,1) + ylim(0,1) + 
@@ -496,9 +349,7 @@ ggplot(gg.EvgMed, aes(x=Y1, y=Y2)) + xlim(0,1) + ylim(0,1) +
   geom_abline(slope=1, linetype=2, colour="red")
 ```
 
-```
-## Error in ggplot(gg.EvgMed, aes(x = Y1, y = Y2)): object 'gg.EvgMed' not found
-```
+![plot of chunk outNu](LC_runTest/outNu-2.png)
 
 ```r
 ggplot(gg.EvgMed, aes(x=Y2, y=med)) + xlim(0,1) + ylim(0,1) + 
@@ -506,9 +357,7 @@ ggplot(gg.EvgMed, aes(x=Y2, y=med)) + xlim(0,1) + ylim(0,1) +
   geom_abline(slope=1, linetype=2, colour="red")
 ```
 
-```
-## Error in ggplot(gg.EvgMed, aes(x = Y2, y = med)): object 'gg.EvgMed' not found
-```
+![plot of chunk outNu](LC_runTest/outNu-3.png)
 
 ```r
 ggplot(gg.med, aes(x=Y1, y=med, ymin=q25, ymax=q75)) + xlim(0,1) + ylim(0,1) + 
@@ -516,9 +365,7 @@ ggplot(gg.med, aes(x=Y1, y=med, ymin=q25, ymax=q75)) + xlim(0,1) + ylim(0,1) +
   geom_abline(slope=1, linetype=3) + facet_grid(Set~LC) 
 ```
 
-```
-## Error in ggplot(gg.med, aes(x = Y1, y = med, ymin = q25, ymax = q75)): object 'gg.med' not found
-```
+![plot of chunk outNu](LC_runTest/outNu-4.png)
 
 ```r
 ggplot(gg.EvgMed, aes(x=Y1, xend=Y1, y=Y2, yend=med,
@@ -529,9 +376,7 @@ ggplot(gg.EvgMed, aes(x=Y1, xend=Y1, y=Y2, yend=med,
   labs(x="Y1", y="Y2 -> median") + theme(legend.position="none")
 ```
 
-```
-## Error in ggplot(gg.EvgMed, aes(x = Y1, xend = Y1, y = Y2, yend = med, : object 'gg.EvgMed' not found
-```
+![plot of chunk outNu](LC_runTest/outNu-5.png)
 
 ```r
 ##########
@@ -543,7 +388,22 @@ gg.med %>% ungroup %>% group_by(Set, LC) %>%
 ```
 
 ```
-## Error in eval(lhs, parent, parent): object 'gg.med' not found
+## # A tibble: 12 x 3
+## # Groups:   Set [?]
+##      Set    LC rmse.mod
+##    <chr> <int>    <dbl>
+##  1 Y1+Y2     1    0.009
+##  2 Y1+Y2     2    0.045
+##  3 Y1+Y2     3    0.093
+##  4 Y1+Y2     4    0.016
+##  5 Y1+Y2     5    0.065
+##  6 Y1+Y2     6    0.082
+##  7    Y2     1    0.036
+##  8    Y2     2    0.070
+##  9    Y2     3    0.123
+## 10    Y2     4    0.086
+## 11    Y2     5    0.079
+## 12    Y2     6    0.110
 ```
 
 ```r
@@ -554,7 +414,20 @@ gg.EvgMed %>% ungroup %>% group_by(Set, LC) %>%
 ```
 
 ```
-## Error in eval(lhs, parent, parent): object 'gg.EvgMed' not found
+## # A tibble: 10 x 6
+## # Groups:   Set [?]
+##      Set    LC rmse.mod rmse.Y2   diff   prop
+##    <chr> <dbl>    <dbl>   <dbl>  <dbl>  <dbl>
+##  1 Y1+Y2     1    0.009   0.020 -0.011 -0.550
+##  2 Y1+Y2     2    0.045   0.047 -0.002 -0.043
+##  3 Y1+Y2     3    0.093   0.195 -0.102 -0.523
+##  4 Y1+Y2     4    0.090   0.175 -0.085 -0.486
+##  5 Y1+Y2     6    0.082   0.246 -0.164 -0.667
+##  6    Y2     1    0.036   0.036  0.000  0.000
+##  7    Y2     2    0.070   0.058  0.012  0.207
+##  8    Y2     3    0.123   0.164 -0.041 -0.250
+##  9    Y2     4    0.075   0.123 -0.048 -0.390
+## 10    Y2     6    0.110   0.160 -0.050 -0.312
 ```
 
 
@@ -567,9 +440,7 @@ ggplot(gg.med, aes(x=BlockCol, y=BlockRow)) +
   geom_point(data=coords_star, aes(x=b.cols, y=b.rows), shape=1)
 ```
 
-```
-## Error in ggplot(gg.med, aes(x = BlockCol, y = BlockRow)): object 'gg.med' not found
-```
+![plot of chunk spatialError](LC_runTest/spatialError-1.png)
 
 
 
@@ -599,11 +470,11 @@ gg.b %>% group_by(Parameter) %>%
 
 ```
 ## # A tibble: 3 x 6
-##   Parameter   q025    q25    med    q75   q975
-##      <fctr>  <dbl>  <dbl>  <dbl>  <dbl>  <dbl>
-## 1 beta_p[1] -2.957 -1.197 -0.790 -0.567 -0.259
-## 2 beta_p[2]  1.352  1.728  1.986  2.335  3.417
-## 3 beta_p[3] -0.445 -0.151  0.009  0.173  0.558
+##   Parameter   q025    q25    med    q75  q975
+##      <fctr>  <dbl>  <dbl>  <dbl>  <dbl> <dbl>
+## 1 beta_p[1] -1.042 -0.661 -0.464 -0.243 0.151
+## 2 beta_p[2]  2.318  2.839  3.141  3.389 4.050
+## 3 beta_p[3]  0.309  0.549  0.682  0.783 1.031
 ```
 
 
@@ -633,7 +504,7 @@ stan_rhat(out)
 ```
 
 ```
-## Warning: Removed 12 rows containing non-finite values (stat_bin).
+## Warning: Removed 11 rows containing non-finite values (stat_bin).
 ```
 
 ![plot of chunk outDiag](LC_runTest/outDiag-3.png)
