@@ -11,50 +11,40 @@ functions {
                    int[] dim) {
     vector[N] V;
     vector[N] Uw;
-    int h;
     vector[N] out_;
     real out;
     
-    Uw[1] = w[1];
-    V[1] = 1;
-    out_[1] = - 0.5 * log(V[1]) - 0.5 / sigmasq * (Uw[1] * Uw[1] / V[1]);
+    out_[1] = - 0.5 / sigmasq * square(w[1]); //since V[1]=1, Uw[1]=w[1]
     
     for(i in 1:(N-1)) {
       matrix[dim[i], dim[i]] temp_neardistM;
       matrix[dim[i], dim[i]] L;
       vector[dim[i]] u;
       vector[dim[i]] v;
-      row_vector[dim[i]] v2;
-      vector[dim[i]] v2_w;
+      row_vector[dim[i]] v_t;
       
-      if(dim[i] == 1) temp_neardistM[1,1] = 1;
-      else {
-        h = 0;
+      temp_neardistM = diag_matrix(rep_vector(1, dim[i]));
+      if(dim[i] > 1) {
+        int h = 0;
         for(j in 1:(dim[i]-1)) {
           for(k in (j+1):dim[i]) {
             h = h + 1;
             temp_neardistM[j,k] = exp(-phi * neardistM[i,h]);
             temp_neardistM[k,j] = temp_neardistM[j,k];
           } //close k
-          temp_neardistM[j,j] = 1;
+          u[j] = exp(-phi * neardist[i,j]);  //for (u[1:(dim-1)] | dim>1)
         } //close j
-        temp_neardistM[dim[i], dim[i]] = 1;
-      } //close else
+      } //close if
       
+      u[dim[i]] = exp(-phi * neardist[i,dim[i]]);  //for u[dim] & (u[1] | dim=1)
       L = cholesky_decompose(temp_neardistM);
-      for(j in 1:dim[i]) {
-        u[j] = exp(-phi * neardist[i,j]);
-      } //close j
       v = mdivide_left_tri_low(L, u);
-      V[i+1] = 1 - (v' * v);
-      v2 = mdivide_right_tri_low(v', L);
-      for(j in 1:dim[i]) {
-        v2_w[j] = v2[j] * w[nearind[i, j]];
-      } //close j
-      
-      Uw[i+1] = w[i+1] - sum(v2_w);
+      v_t = v';
+      V[i+1] = 1 - (v_t * v);
+      Uw[i+1] = w[i+1] - dot_product(mdivide_right_tri_low(v_t, L), 
+                                     w[nearind[i, 1:dim[i]]]);
       out_[i+1] = - 0.5 * log(V[i+1]) 
-                    - 0.5 / sigmasq * (Uw[i+1] * Uw[i+1] / V[i+1]);
+                    - 0.5 / sigmasq * square(Uw[i+1]) / V[i+1];
     } //close i
     out = sum(out_) - 0.5 * N * log(sigmasq);
     return out;
