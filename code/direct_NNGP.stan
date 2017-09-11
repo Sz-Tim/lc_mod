@@ -5,6 +5,7 @@ functions {
                    real phi, 
                    matrix neardist,
                    matrix neardistM,
+                   matrix[] temp_neardistM,
                    int[,] nearind, 
                    int N,
                    int M,
@@ -17,27 +18,21 @@ functions {
     out_[1] = - 0.5 / sigmasq * square(w[1]); //since V[1]=1, Uw[1]=w[1]
     
     for(i in 1:(N-1)) {
-      matrix[dim[i], dim[i]] temp_neardistM;
+      matrix[dim[i], dim[i]] exp_neardistM;
       matrix[dim[i], dim[i]] L;
       vector[dim[i]] u;
       vector[dim[i]] v;
       row_vector[dim[i]] v_t;
       
-      temp_neardistM = diag_matrix(rep_vector(1, dim[i]));
+      exp_neardistM[1,1] = 1;
+      u[dim[i]] = exp(-phi * neardist[i,dim[i]]);  //for (u[1] | dim==1)
       if(dim[i] > 1) {
-        int h = 0;
-        for(j in 1:(dim[i]-1)) {
-          for(k in (j+1):dim[i]) {
-            h = h + 1;
-            temp_neardistM[j,k] = exp(-phi * neardistM[i,h]);
-            temp_neardistM[k,j] = temp_neardistM[j,k];
-          } //close k
-          u[j] = exp(-phi * neardist[i,j]);  //for (u[1:(dim-1)] | dim>1)
-        } //close j
+        exp_neardistM = exp(-phi * block(temp_neardistM[i],1,1,dim[i],dim[i]));
+        u = exp(-phi*sub_row(neardist,i,1,dim[i])');
+        for(j in 1:dim[i]) exp_neardistM[j,j] = 1;
       } //close if
       
-      u[dim[i]] = exp(-phi * neardist[i,dim[i]]);  //for u[dim] & (u[1] | dim=1)
-      L = cholesky_decompose(temp_neardistM);
+      L = cholesky_decompose(exp_neardistM);
       v = mdivide_left_tri_low(L, u);
       v_t = v';
       V[i+1] = 1 - (v_t * v);
@@ -82,15 +77,15 @@ functions {
 
 data {
   //counts and indices
-  int n1;  //number of cells with Y1 & Y2
+  int n1;  //number of cells for GRANIT
   int n2;  //n1 + 1 (for indexing)
-  int n3;  //number of cells with only Y2
+  int n3;  //number of cells for NLCD + covariates
   int L;  //number of land cover classes
   int nB_d[L-2];  //number of bias covariates for each LC
   int nB_p;  //number of covariates for pr(WP|Evg)
   //landcover: observed
   vector<lower=0, upper=1>[L-1] Y1[n1];  //GRANIT proportions
-  matrix<lower=0, upper=1>[n3,L-2] Y2;  //NLCD proportions
+  vector<lower=0, upper=1>[L-2] Y2[n3];  //NLCD proportions
   //covariates
   matrix[n3,nB_p] X_p;  //pr(WP|Evg) covariates
   matrix[n3,nB_d[1]] X_d1;  //bias covariates: Dev
@@ -130,19 +125,31 @@ transformed data {
   matrix[n3,nB_d[4]] Q_d4 = qr_Q(X_d4)[,1:nB_d[4]] * sqrt(n3-1);
   matrix[nB_d[4],nB_d[4]] R_d4 = qr_R(X_d4)[1:nB_d[4],] / sqrt(n3-1);
   matrix[nB_d[4],nB_d[4]] R_inv_d4 = inverse(R_d4);
-  //NNGP matrix sizes
+  //NNGP matrix sizes & distances
   int dim[n3-1];
-  for(i in 2:n3) dim[i-1] = i < (M+1) ? (i-1) : M;
+  matrix[M,M] temp_neardistM[n3-1];
+  for(i in 1:(n3-1)) {
+    dim[i] = (i+1) < (M+1) ? i : M;
+    temp_neardistM[i] = diag_matrix(rep_vector(1, M));
+    if(dim[i] > 1) {
+      int h = 0;
+      for(j in 1:(dim[i]-1)) {
+        for(k in (j+1):dim[i]) {
+          h = h + 1;
+          temp_neardistM[i,j,k] = neardistM[i,h];
+          temp_neardistM[i,k,j] = neardistM[i,h];
+        } //close k
+      } //close j
+    } //close if
+  }
 }
 
 parameters {
   //landcover: covariance
-  cholesky_factor_corr[L-1] L_Omega[2];
-  vector<lower=0>[L-1] L_sigma[2];
-  //landcover: latent not constrained to be compositional
-  vector[L-1] nu[n1];
-  //thetas: QR decomposition slopes
-  vector[nB_p] theta_p;  //pr(WP|Evg) thetas
+  cholesky_factor_corr[L-1] L_Omega; 
+  vector<lower=0>[L-1] L_sigma; 
+  //betas
+  vector[nB_p] theta_p;  //pr(WP|Evg) betas (QR decomposition)
   vector[n_beta_d] theta_d;  //bias thetas
   //NNGP
   real<lower=0> sigma[L-1];  //sqrt(nugget)
@@ -152,93 +159,84 @@ parameters {
 
 transformed parameters {
   //NLCD de-biasing and splitting
-  vector[L-1] Y2_[n1];  
-  //betas
-  vector[nB_p] beta_p;  //pr(WP|Evg) betas
-  vector[n_beta_d] beta_d;  //bias betas
-
+  vector[L-1] Y2_[n1];
+  vector[nB_p] beta_p;
+  vector[n_beta_d] beta_d;
   
-  //QR decopmositions
+  //QR decompositions
   beta_p = R_inv_p * theta_p;
   beta_d[1:d1_2] = R_inv_d1 * theta_d[1:d1_2];
   beta_d[d2_1:d2_2] = R_inv_d2 * theta_d[d2_1:d2_2];
   beta_d[d3_1:d3_2] = R_inv_d3 * theta_d[d3_1:d3_2];
   beta_d[d4_1:d4_2] = R_inv_d4 * theta_d[d4_1:d4_2];
-  
-  
-  //correct bias & split WP to [,4] and Evg to [,5]
-  ////fit betas using cells with Y1 & Y2
-  Y2_[1:n1,1] = to_array_1d(Y2[1:n1,1] 
+
+  //split and de-bias Y2
+  Y2_[,1] = to_array_1d(to_vector(Y2[1:n1,1]) 
       + (Q_d1[1:n1,] * theta_d[1:d1_2]) 
       + w[1,1:n1]);
-  Y2_[1:n1,2] = to_array_1d(Y2[1:n1,2] 
+  Y2_[,2] = to_array_1d(to_vector(Y2[1:n1,2]) 
       + (Q_d2[1:n1,] * theta_d[d2_1:d2_2])
       + w[2,1:n1]);
-  Y2_[1:n1,3] = to_array_1d(Y2[1:n1,3] 
+  Y2_[,3] = to_array_1d(to_vector(Y2[1:n1,3]) 
       + (Q_d3[1:n1,] * theta_d[d3_1:d3_2])
       + w[3,1:n1]);
-  Y2_[1:n1,4] = to_array_1d((Y2[1:n1,4] 
+  Y2_[,4] = to_array_1d((to_vector(Y2[1:n1,4]) 
           + (Q_d4[1:n1,] * theta_d[d4_1:d4_2])) 
-        .* inv_logit(Q_p[1:n1,] * theta_p)
+        .* inv_logit(Q_p[1:n1] * theta_p)
       + w[4,1:n1]);
-  Y2_[1:n1,5] = to_array_1d((Y2[1:n1,4] 
+  Y2_[,5] = to_array_1d((to_vector(Y2[1:n1,4]) 
           + (Q_d4[1:n1,] * theta_d[d4_1:d4_2])) 
-        .* (1-inv_logit(Q_p[1:n1,] * theta_p))
-      + w[5,1:n1]);
+        .* (1 - inv_logit(Q_p[1:n1] * theta_p))
+      + w[5,1:n1]);  
 }
 
 model {
   //NNGP
   sigma ~ normal(0, 1);
-  phi ~ normal(0, 3);
+  phi ~ normal(0, 1);
   for(l in 1:(L-1)) {
-    w[l] ~ nngp_w(sigma[l]^2, phi[l], neardist, neardistM, nearind, n3, M, dim);
+    w[l] ~ nngp_w(sigma[l]^2, phi[l], neardist, neardistM, temp_neardistM,
+                  nearind, n3, M, dim);
   }
+  
   //covariance priors
-  for(j in 1:2) {
-    L_Omega[j] ~ lkj_corr_cholesky(8);
-    L_sigma[j] ~ normal(0, 1);
-  }
- 
-  //nu priors
-  for(l in 1:(L-1)) {
-    nu[,l] ~ normal(0.5, 1);
-  }
+  L_Omega ~ lkj_corr_cholesky(8);
+  L_sigma ~ normal(0, 1);
   
   //beta priors
   beta_p ~ normal(0, 1);
   beta_d ~ normal(0, 0.1);
   
   //likelihood
-   Y1 ~ multi_normal_cholesky(nu, diag_pre_multiply(L_sigma[1], L_Omega[1]));
-   Y2_ ~ multi_normal_cholesky(nu, diag_pre_multiply(L_sigma[2], L_Omega[2]));
+   Y1 ~ multi_normal_cholesky(Y2_, 
+                diag_pre_multiply(L_sigma, L_Omega));
 }
 
 generated quantities {
   //landcover: latent compositional
-  simplex[L] n_eta[n3];  //gjam transformed nu
-  vector[L-1] Y2new_[n3-n1];  //unbiased, split NLCD
-  
-  Y2new_[,1] = to_array_1d(Y2[n2:n3,1] 
+  vector[L-1] Y2new_[n3-n1];
+  simplex[L] n_eta[n3];
+
+  Y2new_[,1] = to_array_1d(to_vector(Y2[n2:n3,1])
       + (Q_d1[n2:n3,] * theta_d[1:d1_2])
       + w[1,n2:n3]);
-  Y2new_[,2] = to_array_1d(Y2[n2:n3,2] 
+  Y2new_[,2] = to_array_1d(to_vector(Y2[n2:n3,2])
       + (Q_d2[n2:n3,] * theta_d[d2_1:d2_2])
-      + w[1,n2:n3]);
-  Y2new_[,3] = to_array_1d(Y2[n2:n3,3] 
+      + w[2,n2:n3]);
+  Y2new_[,3] = to_array_1d(to_vector(Y2[n2:n3,3])
       + (Q_d3[n2:n3,] * theta_d[d3_1:d3_2])
-      + w[1,n2:n3]);
-  Y2new_[,4] = to_array_1d((Y2[n2:n3,4] 
+      + w[3,n2:n3]);
+  Y2new_[,4] = to_array_1d((to_vector(Y2[n2:n3,4])
           + (Q_d4[n2:n3,] * theta_d[d4_1:d4_2])) 
-        .* inv_logit(Q_p[n2:n3,] * theta_p)
-      + w[1,n2:n3]);
-  Y2new_[,5] = to_array_1d((Y2[n2:n3,4] 
-          + (X_d4[n2:n3,] * theta_d[d4_1:d4_2])) 
-        .* (1-inv_logit(Q_p[n2:n3,] * theta_p))
-      + w[1,n2:n3]);
-  
+        .* inv_logit(Q_p[n2:n3] * theta_p)
+      + w[4,n2:n3]);
+  Y2new_[,5] = to_array_1d((to_vector(Y2[n2:n3,4])
+          + (Q_d4[n2:n3,] * theta_d[d4_1:d4_2])) 
+        .* (1 - inv_logit(Q_p[n2:n3] * theta_p))
+      + w[5,n2:n3]);
+
   for(n in 1:n1) {
-    n_eta[n] = tr_gjam_inv(nu[n]);
+    n_eta[n] = tr_gjam_inv(Y2_[n]);
   }
   for(n in n2:n3) {
     n_eta[n] = tr_gjam_inv(Y2new_[n-n1]);

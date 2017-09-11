@@ -5,56 +5,41 @@ functions {
                    real phi, 
                    matrix neardist,
                    matrix neardistM,
+                   matrix[] temp_neardistM,
                    int[,] nearind, 
                    int N,
                    int M,
                    int[] dim) {
     vector[N] V;
     vector[N] Uw;
-    int h;
     vector[N] out_;
     real out;
     
-    Uw[1] = w[1];
-    V[1] = 1;
-    out_[1] = - 0.5 * log(V[1]) - 0.5 / sigmasq * (Uw[1] * Uw[1] / V[1]);
+    out_[1] = - 0.5 / sigmasq * square(w[1]); //since V[1]=1, Uw[1]=w[1]
     
     for(i in 1:(N-1)) {
-      matrix[dim[i], dim[i]] temp_neardistM;
+      matrix[dim[i], dim[i]] exp_neardistM;
       matrix[dim[i], dim[i]] L;
       vector[dim[i]] u;
       vector[dim[i]] v;
-      row_vector[dim[i]] v2;
-      vector[dim[i]] v2_w;
+      row_vector[dim[i]] v_t;
       
-      if(dim[i] == 1) temp_neardistM[1,1] = 1;
-      else {
-        h = 0;
-        for(j in 1:(dim[i]-1)) {
-          for(k in (j+1):dim[i]) {
-            h = h + 1;
-            temp_neardistM[j,k] = exp(-phi * neardistM[i,h]);
-            temp_neardistM[k,j] = temp_neardistM[j,k];
-          } //close k
-          temp_neardistM[j,j] = 1;
-        } //close j
-        temp_neardistM[dim[i], dim[i]] = 1;
-      } //close else
+      exp_neardistM[1,1] = 1;
+      u[dim[i]] = exp(-phi * neardist[i,dim[i]]);  //for (u[1] | dim==1)
+      if(dim[i] > 1) {
+        exp_neardistM = exp(-phi * block(temp_neardistM[i],1,1,dim[i],dim[i]));
+        u = exp(-phi*sub_row(neardist,i,1,dim[i])');
+        for(j in 1:dim[i]) exp_neardistM[j,j] = 1;
+      } //close if
       
-      L = cholesky_decompose(temp_neardistM);
-      for(j in 1:dim[i]) {
-        u[j] = exp(-phi * neardist[i,j]);
-      } //close j
+      L = cholesky_decompose(exp_neardistM);
       v = mdivide_left_tri_low(L, u);
-      V[i+1] = 1 - (v' * v);
-      v2 = mdivide_right_tri_low(v', L);
-      for(j in 1:dim[i]) {
-        v2_w[j] = v2[j] * w[nearind[i, j]];
-      } //close j
-      
-      Uw[i+1] = w[i+1] - sum(v2_w);
+      v_t = v';
+      V[i+1] = 1 - (v_t * v);
+      Uw[i+1] = w[i+1] - dot_product(mdivide_right_tri_low(v_t, L), 
+                                     w[nearind[i, 1:dim[i]]]);
       out_[i+1] = - 0.5 * log(V[i+1]) 
-                    - 0.5 / sigmasq * (Uw[i+1] * Uw[i+1] / V[i+1]);
+                    - 0.5 / sigmasq * square(Uw[i+1]) / V[i+1];
     } //close i
     out = sum(out_) - 0.5 * N * log(sigmasq);
     return out;
@@ -114,8 +99,23 @@ transformed data {
   matrix[n3,nB_p] Q_p = qr_Q(X_p)[,1:nB_p] * sqrt(n3-1);
   matrix[nB_p,nB_p] R_p = qr_R(X_p)[1:nB_p,] / sqrt(n3-1);
   matrix[nB_p,nB_p] R_inv_p = inverse(R_p);
+  //NNGP matrix sizes & distances
   int dim[n3-1];
-  for(i in 2:n3) dim[i-1] = i < (M+1) ? (i-1) : M;
+  matrix[M,M] temp_neardistM[n3-1];
+  for(i in 1:(n3-1)) {
+    dim[i] = (i+1) < (M+1) ? i : M;
+    temp_neardistM[i] = diag_matrix(rep_vector(1, M));
+    if(dim[i] > 1) {
+      int h = 0;
+      for(j in 1:(dim[i]-1)) {
+        for(k in (j+1):dim[i]) {
+          h = h + 1;
+          temp_neardistM[i,j,k] = neardistM[i,h];
+          temp_neardistM[i,k,j] = neardistM[i,h];
+        } //close k
+      } //close j
+    } //close if
+  }
 }
 
 parameters {
@@ -158,7 +158,8 @@ model {
   sigma ~ normal(0, 1);
   phi ~ normal(0, 1);
   for(l in 1:(L-1)) {
-    w[l] ~ nngp_w(sigma[l]^2, phi[l], neardist, neardistM, nearind, n3, M, dim);
+    w[l] ~ nngp_w(sigma[l]^2, phi[l], neardist, neardistM, temp_neardistM,
+                  nearind, n3, M, dim);
   }
   
   //covariance priors
