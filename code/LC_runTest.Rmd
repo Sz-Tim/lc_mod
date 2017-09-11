@@ -16,7 +16,8 @@ source("code/LC_fun.R"); source("code/stan_utilities.R"); theme_set(theme_bw())
 ```{r readData, message=FALSE}
 grdSz <- "01_1a"
 blockSize <- 10  # block = (blockSize x blockSize) grid cells
-maxGridLen <- 10  # number of blocks to include per side: nBlocks = maxGridLen^2
+maxGridRow <- 5  # number of blocks per row; 1-40
+maxGridCol <- 7  # number of blocks per column; 1-54
 
 # cell-block reference tibble
 cb.i <- read_csv(paste0("data/roads_", grdSz, ".csv")) %>% 
@@ -30,8 +31,8 @@ cb.i <- read_csv(paste0("data/roads_", grdSz, ".csv")) %>%
                        str_pad(BlockRow, 7, "left", "0"), sep=".") %>% 
            as.numeric %>% factor %>% as.numeric) %>%
   select(c(CellID, CellRow, CellCol, BlockID, BlockRow, BlockCol, left, top))
-Block.inc <- cb.i$BlockID[cb.i$BlockCol <= maxGridLen &
-                            cb.i$BlockRow <= maxGridLen] %>% unique
+Block.inc <- cb.i$BlockID[cb.i$BlockCol <= maxGridCol &
+                            cb.i$BlockRow <= maxGridRow] %>% unique
 
 # covariates summarized to blocks
 pop00 <- read_csv(paste0("data/pop00_", grdSz, ".csv")) %>% 
@@ -124,19 +125,19 @@ Yd <- tibble(d1=c(scale(grnt[,1]-nlcd[,1])),
              el=c(scale(topo$el)),
              rugg=c(scale(topo$rugg)))
 cor(Yd)
-```
-
-
-```{r GPP, fig.width=5, fig.height=5}
 # block distances & adjacency
 b.rows <- cb.i$BlockRow[match(rdLen$BlockID[n$all], cb.i$BlockID)]
 b.cols <- cb.i$BlockCol[match(rdLen$BlockID[n$all], cb.i$BlockID)]
 coords <- data.frame(b.cols, b.rows)
+```
+
+
+```{r GPP, fig.width=5, fig.height=5}
 #D <- as.matrix(dist(coords))
 
 # knots
-m.cols <- 5
-m.rows <- 5
+m.cols <- 3
+m.rows <- 3
 m <- m.rows * m.cols
 coords_star <- place_knots(m.cols, m.rows, coords)
 D_star <- as.matrix(dist(coords_star))
@@ -160,14 +161,14 @@ nearind <- sapply(1:(n$tot-1), get_nearind, ind_distM$i)
 ```{r modelRun}
 d <- list(n1=nFit, n2=nFit+1, n3=n$tot, L=6, nB_d=nBd, nB_p=nBp,
           Y1=Y1.fit[,-6], Y2=Y2[,-5], 
-          m=m, D_star=D_star, D_site_star=D_site_star,
+          # m=m, D_star=D_star, D_site_star=D_site_star,
           M=M, nearind=t(nearind), neardist=t(neardist), neardistM=t(neardistM), 
           X_d1=Xd[[1]], X_d2=Xd[[2]], X_d3=Xd[[3]], X_d4=Xd[[4]], X_p=Xp)
-stan_rdump(ls(d), file="code/LC_mod_examp.Rdump", envir=list2env(d))
-out <- stan(file="code/LC_mod_Y2X_NNGP.stan", init=0, thin=25,
-            data=d, 
-            iter=500, warmup=200, chains=4, seed=4337, refresh=10,
-            include=FALSE, pars=c("Y2_", "Y2new_", "sig_sq", "eta_sq",
+stan_rdump(ls(d), file="code/all_data.Rdump", envir=list2env(d))
+out <- stan(file="code/latent_qrBeta_NNGP.stan", init=0, thin=5,
+            data=read_rdump("code/all_data.Rdump"), 
+            iter=500, warmup=200, chains=4, seed=4337, refresh=20,
+            include=FALSE, pars=c("Y2_", "Y2new_", "nu", "sig_sq", "eta_sq",
                                   "e_z", "w_z", "w", "w_star",
                                   "Cstar", "C_site_inv_Cstar", "C_site_star"))
 check_treedepth(out); check_energy(out); check_div(out)
@@ -255,8 +256,8 @@ gg.EvgMed %>% ungroup %>% group_by(Set, LC) %>%
 ggplot(gg.med, aes(x=BlockCol, y=BlockRow)) + 
   geom_tile(aes(fill=med-Y1, colour=Set)) + facet_grid(.~LC) +
   scale_fill_gradient2(limits=c(-1, 1)) + 
-  scale_colour_manual(values=c("NA", "gray30")) +
-  geom_point(data=coords_star, aes(x=b.cols, y=b.rows), shape=1)
+  scale_colour_manual(values=c("NA", "gray30")) #+
+  # geom_point(data=coords_star, aes(x=b.cols, y=b.rows), shape=1)
 ```
 
 
