@@ -148,12 +148,13 @@ plot(coords, pch=20, col="gray40"); points(coords_star, pch=8, col="red")
 
 
 ```{r NNGP}
-M <- 24
-coords.m <- as.matrix(coords[order(coords[,1]),])
-ind_distM <- get_index_dist(coords.m, M)
-neardistM <- sapply(1:(n$tot-1), get_neardistM, ind_distM$d)
-neardist <- sapply(1:(n$tot-1), get_neardist, ind_distM$d)
-nearind <- sapply(1:(n$tot-1), get_nearind, ind_distM$i)
+M_r <- 1
+coords.m <- as.matrix(coords)
+id_d_M <- get_index_dist(coords.m, M_r)
+nn_dM <- sapply(1:n$tot, get_neardistM, id_d_M, M_r)
+nn_d <- sapply(1:n$tot, get_neardist, id_d_M, M_r)
+nn_id <- sapply(1:n$tot, get_nearind, id_d_M, M_r)
+nn_dim <- colSums(nn_id > 0)
 ```
 
 
@@ -161,15 +162,16 @@ nearind <- sapply(1:(n$tot-1), get_nearind, ind_distM$i)
 ```{r modelRun}
 d <- list(n1=nFit, n2=nFit+1, n3=n$tot, L=6, nB_d=nBd, nB_p=nBp,
           Y1=Y1.fit[,-6], Y2=Y2[,-5], 
-          # m=m, D_star=D_star, D_site_star=D_site_star,
-          M=M, nearind=t(nearind), neardist=t(neardist), neardistM=t(neardistM), 
+          m=m, D_star=D_star, D_site_star=D_site_star,
+          M=(1+2*M_r)^2-1, nn_id=t(nn_id), nn_d=nn_d, 
+          nn_dM=t(nn_dM), nn_dim=nn_dim,
           X_d1=Xd[[1]], X_d2=Xd[[2]], X_d3=Xd[[3]], X_d4=Xd[[4]], X_p=Xp)
 stan_rdump(ls(d), file="code/all_data.Rdump", envir=list2env(d))
 out <- stan(file="code/latent_qrBeta_NNGP.stan", init=0, thin=5,
             data=read_rdump("code/all_data.Rdump"), 
-            iter=500, warmup=200, chains=4, seed=4337, refresh=20,
+            iter=500, warmup=200, chains=3, seed=4337, refresh=20,
             include=FALSE, pars=c("Y2_", "Y2new_", "nu", "sig_sq", "eta_sq",
-                                  "e_z", "w_z", "w", "w_star",
+                                  "e_z", "w_z", "w_star",
                                   "Cstar", "C_site_inv_Cstar", "C_site_star"))
 check_treedepth(out); check_energy(out); check_div(out)
 sampler_params <- get_sampler_params(out, inc_warmup=FALSE)
