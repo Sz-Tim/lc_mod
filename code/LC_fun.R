@@ -93,71 +93,138 @@ place_knots <- function(mx, my, coords) {
 
 
 ##########
-## NNGP setup
+## NNGP setup: Lu Zhang example
+##########
+# 
+# i_index <- function(i, s, M) {
+#   require(fields)
+#   if(M >= (i - 1)) {im <- 1:(i - 1)}
+#   else 	{
+#     dist <- rdist(s[c(1,i),], s[c(1:(i-1)), ])[-1,]
+#     im <- sort(order(dist)[1:M])
+#   }
+#   return(im)
+# }
+# 
+# 
+# 
+# i_dist <- function(i, neighbor_index, s) {
+#   dist(s[c(i, neighbor_index[[i - 1]]), ])
+# }
+# 
+# 
+# 
+# get_index_dist <- function(s, M) {
+#   
+#   n = nrow(s)
+#   M = min(M, n-1)
+#   # get index of neighborhood
+#   neighbor_index <- sapply(2:n, i_index, s, M)
+#   # get distance matrix for each i
+#   neighbor_dist <- sapply(2:n, i_dist, neighbor_index, s)
+#   
+#   return(list(i = neighbor_index, d = neighbor_dist))
+# }
+# 
+# 
+# 
+# get_neardistM <- function (ind, ind_distM_d) {
+#   if (ind < M ){l = ind } else {l = M}; 
+#   M_i <- rep(0, M * (M - 1) / 2);
+#   if (l == 1) {}
+#   else{
+#     M_i[1: (l * (l - 1) / 2)] <- 
+#       c(ind_distM_d[[ind]])[(l + 1): (l * (l + 1) / 2)]
+#   }
+#   return(M_i)
+# }
+# 
+# 
+# 
+# get_neardist <- function (ind, ind_distM_d) {
+#   if (ind < M ){l = ind } else {l = M}; 
+#   D_i <- rep(0, M);
+#   D_i[1:l]<-c(ind_distM_d[[ind]])[1:l]
+#   return( D_i)
+# }
+# 
+# 
+# 
+# get_nearind <- function (ind, ind_distM_i) {
+#   if (ind < M ){l = ind } else {l = M}; 
+#   D_i <- rep(0, M);
+#   D_i[1:l]<-c(ind_distM_i[[ind]])[1:l]
+#   return( D_i)
+# }
+
+
+
+##########
+## NNGP setup: gridded pixels
 ##########
 
-i_index <- function(i, s, M) {
-  require(fields)
-  if(M >= (i - 1)) {im <- 1:(i - 1)}
-  else 	{
-    dist <- rdist(s[c(1,i),], s[c(1:(i-1)), ])[-1,]
-    im <- sort(order(dist)[1:M])
-  }
+i_index <- function(i, s, M_r) {
+  ### generates list of nearest neighbor indices for pixel i
+  # i: row index within coordinates s
+  # s: coordinates as pixel column[,1] & row[,2]
+  # M_r: neighborhood size as ± M_r rows & cols
+  require(dplyr)
+  x_nn <- seq.int(max(s[i,1]-M_r, min(s[,1])), min(s[i,1]+M_r, max(s[,1])))
+  y_nn <- seq.int(max(s[i,2]-M_r, min(s[,2])), min(s[i,2]+M_r, max(s[,2])))
+  nn <- filter(expand.grid(nn.col=x_nn, nn.row=y_nn), 
+               !(nn.col==s[i,1] & nn.row==s[i,2]))
+  im <- which(paste(s[,1], s[,2]) %in% paste(nn[,1], nn[,2]))
   return(im)
 }
 
-
-
-i_dist <- function(i, neighbor_index, s) {
-  dist(s[c(i, neighbor_index[[i - 1]]), ])
+i_dist <- function(i, nn_ind, s) {
+  ### calculates nearest neighbor distances for pixel i
+  dist(s[c(i, nn_ind[[i]]), ])
 }
 
-
-
-get_index_dist <- function(s, M) {
-  
-  n = nrow(s)
-  M = min(M, n-1)
-  # get index of neighborhood
-  neighbor_index <- sapply(2:n, i_index, s, M)
-  # get distance matrix for each i
-  neighbor_dist <- sapply(2:n, i_dist, neighbor_index, s)
-  
-  return(list(i = neighbor_index, d = neighbor_dist))
+get_index_dist <- function(s, M_r) {
+  ### generates nn indices and distance matrix for each pixel in s
+  # s: coordinates as pixel column[,1] & row[,2]
+  # M_r: neighborhood size as ± M_r rows & cols
+  nn_index <- sapply(1:nrow(s), i_index, s, M_r)
+  nn_dist <- sapply(1:nrow(s), i_dist, nn_index, s)
+  return(list(i=nn_index, d=nn_dist))
 }
 
-
-
-get_neardistM <- function (ind, ind_distM_d) {
-  if (ind < M ){l = ind } else {l = M}; 
-  M_i <- rep(0, M * (M - 1) / 2);
-  if (l == 1) {}
-  else{
-    M_i[1: (l * (l - 1) / 2)] <- 
-      c(ind_distM_d[[ind]])[(l + 1): (l * (l + 1) / 2)]
-  }
+get_neardistM <- function (i, id_d_M, M_r) {
+  ### generates vector of distance matrix for pixel i
+  # i: row index within coordinates s
+  # id_d_M: output from get_index_dist with i=nn_index & d=nn_distance
+  max_nn <- (1 + 2*M_r)^2 - 1
+  n_nn <- length(id_d_M$i[[i]])
+  M_i <- rep(0, max_nn*(max_nn-1)/2)
+  M_i[1:(n_nn*(n_nn-1)/2)] <- c(id_d_M$d[[i]])[(n_nn+1):(n_nn*(n_nn+1)/2)]
   return(M_i)
 }
 
-
-
-get_neardist <- function (ind, ind_distM_d) {
-  if (ind < M ){l = ind } else {l = M}; 
-  D_i <- rep(0, M);
-  D_i[1:l]<-c(ind_distM_d[[ind]])[1:l]
+get_neardist <- function (i, id_d_M, M_r) {
+  ### generates vector of distances from pixel i
+  # i: row index within coordinates s
+  # id_d_M: output from get_index_dist with i=nn_index & d=nn_distance
+  # M_r: neighborhood size as ± M_r rows & cols
+  max_nn <- (1 + 2*M_r)^2 - 1
+  n_nn <- length(id_d_M$i[[i]])
+  D_i <- rep(0, max_nn)
+  D_i[1:n_nn] <- c(id_d_M$d[[i]])[1:n_nn]
   return( D_i)
 }
 
-
-
-get_nearind <- function (ind, ind_distM_i) {
-  if (ind < M ){l = ind } else {l = M}; 
-  D_i <- rep(0, M);
-  D_i[1:l]<-c(ind_distM_i[[ind]])[1:l]
+get_nearind <- function (i, id_d_M, M_r) {
+  ### generates vector of indices to pair with get_neardist
+  # i: row index within coordinates s
+  # id_d_M: output from get_index_dist with i=nn_index & d=nn_distance
+  # M_r: neighborhood size as ± M_r rows & cols
+  max_nn <- (1 + 2*M_r)^2 - 1
+  n_nn <- length(id_d_M$i[[i]])
+  D_i <- rep(0, max_nn)
+  D_i[1:n_nn] <- c(id_d_M$i[[i]])[1:n_nn]
   return( D_i)
 }
-
-
 
 
 
