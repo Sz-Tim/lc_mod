@@ -15,8 +15,8 @@ source("code/LC_fun.R"); source("code/stan_utilities.R"); theme_set(theme_bw())
 ```{r readData, message=FALSE}
 grdSz <- "01_1a"
 blockSize <- 10  # block = (blockSize x blockSize) grid cells
-maxGridRow <- 4  # number of blocks per row; 1-40
-maxGridCol <- 4  # number of blocks per column; 1-54
+maxGridRow <- 5  # number of blocks per row; 1-40
+maxGridCol <- 5  # number of blocks per column; 1-54
 
 # cell-block reference tibble
 cb.i <- read_csv(paste0("data/roads_", grdSz, ".csv")) %>% 
@@ -77,8 +77,8 @@ nlcd <- read_csv(paste0("data/out_",grdSz,"_nlcd.csv"))  %>%
 ```{r modelSetup}
 # small scale runs: set nCell for Y1&Y2 and Y2
 set.seed(22222)
-nFit <- 12
-nNew <- 4
+nFit <- 20
+nNew <- 5
 n <- sampleCells(nFit, nNew, nrow(grnt), partition=TRUE)
 
 # Y1 & Y2
@@ -162,13 +162,13 @@ nn_dim <- colSums(nn_d > 0)
 d <- list(n1=nFit, n2=nFit+1, n3=n$tot, L=6, nB_d=nBd, nB_p=nBp,
           Y1=Y1.fit[,-6], Y2=Y2[,-5], 
           m=m, D_star=D_star, D_site_star=D_site_star,
-          M=(1+2*M_r)^2-1, nn_id=t(nn_id), nn_d=nn_d, nn_dM=t(nn_dM),
+          M=(1+2*M_r)^2-1, nn_id=nn_id, nn_d=nn_d, nn_dM=nn_dM,
           nn_dim=nn_dim, dim_r=nrow(id_d_M$n_M_ref), dim_i=id_d_M$n_M_ref,
           X_d1=Xd[[1]], X_d2=Xd[[2]], X_d3=Xd[[3]], X_d4=Xd[[4]], X_p=Xp)
 stan_rdump(ls(d), file="code/all_data.Rdump", envir=list2env(d))
-out <- stan(file="code/direct_SpOnly_cNNGP.stan", init=0, thin=5,
+out <- stan(file="code/latent_qrBeta_NNGP.stan", init=0, thin=5,
             data=read_rdump("code/all_data.Rdump"), 
-            iter=200, warmup=100, chains=1, seed=4337, refresh=10,
+            iter=2000, warmup=1000, chains=1, seed=43337, refresh=25,
             include=FALSE, pars=c("Y2_", "Y2new_", "nu", "sig_sq", "eta_sq",
                                   "e_z", "w_z", "w_star",
                                   "Cstar", "C_site_inv_Cstar", "C_site_star"))
