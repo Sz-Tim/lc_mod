@@ -186,9 +186,21 @@ get_index_dist <- function(s, M_r) {
   ### generates nn indices and distance matrix for each pixel in s
   # s: coordinates as pixel column[,1] & row[,2]
   # M_r: neighborhood size as ± M_r rows & cols
+  require(purrr)
   nn_index <- sapply(1:nrow(s), i_index, s, M_r)
-  nn_dist <- sapply(1:nrow(s), i_dist, nn_index, s)
-  return(list(i=nn_index, d=nn_dist))
+  nn_order <- order(purrr::map_int(nn_index, length))
+  nn_dist <- sapply(1:nrow(s), i_dist, nn_index, s)[nn_order]
+  nn_index <- nn_index[nn_order]
+  s_nn <- s[nn_order,]
+  n_M <- purrr::map_int(nn_index, length)
+  nn_M <- unique(n_M)
+  n_M_ref <- matrix(nrow=length(nn_M), ncol=3)
+  colnames(n_M_ref) <- c("nn_M", "i_start", "i_end")
+  for(r in 1:length(nn_M)) {
+    n_M_ref[r,] <- c(nn_M[r], range(which(n_M == nn_M[r])))
+  }
+  
+  return(list(i=nn_index, d=nn_dist, s_nn=s_nn, n_M_ref=n_M_ref))
 }
 
 get_neardistM <- function (i, id_d_M, M_r) {
