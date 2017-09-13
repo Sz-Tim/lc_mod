@@ -154,6 +154,7 @@ nn_dM <- sapply(1:n$tot, get_neardistM, id_d_M, M_r)
 nn_d <- sapply(1:n$tot, get_neardist, id_d_M, M_r)
 nn_id <- sapply(1:n$tot, get_nearind, id_d_M, M_r)
 nn_dim <- colSums(nn_d > 0)
+nn_YX <- id_d_M$nn_grp_index
 ```
 
 
@@ -162,15 +163,16 @@ nn_dim <- colSums(nn_d > 0)
 d <- list(n1=nFit, n2=nFit+1, n3=n$tot, L=6, nB_d=nBd, nB_p=nBp,
           Y1=Y1.fit[,-6], Y2=Y2[,-5], 
           m=m, D_star=D_star, D_site_star=D_site_star,
-          M=(1+2*M_r)^2-1, nn_id=nn_id, nn_d=nn_d, nn_dM=nn_dM,
+          M=(1+2*M_r)^2-1, nn_id=nn_id, nn_d=nn_d, nn_dM=nn_dM, nn_YX=nn_YX,
           nn_dim=nn_dim, dim_r=nrow(id_d_M$n_M_ref), dim_i=id_d_M$n_M_ref,
           X_d1=Xd[[1]], X_d2=Xd[[2]], X_d3=Xd[[3]], X_d4=Xd[[4]], X_p=Xp)
 stan_rdump(ls(d), file="code/all_data.Rdump", envir=list2env(d))
-out <- stan(file="code/latent_qrBeta_NNGP.stan", init=0, thin=5,
+out <- stan(file="code/direct_NNGP.stan", init=0, thin=5,
             data=read_rdump("code/all_data.Rdump"), 
-            iter=2000, warmup=1000, chains=1, seed=43337, refresh=25,
+            iter=200, warmup=100, chains=2, seed=43337, refresh=50,
             include=FALSE, pars=c("Y2_", "Y2new_", "nu", "sig_sq", "eta_sq",
                                   "e_z", "w_z", "w_star",
+                                  "V", "uw_dp", "um", 
                                   "Cstar", "C_site_inv_Cstar", "C_site_star"))
 check_treedepth(out); check_energy(out); check_div(out)
 sampler_params <- get_sampler_params(out, inc_warmup=FALSE)
