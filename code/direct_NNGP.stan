@@ -46,6 +46,7 @@ data {
   matrix[n3,nB_d[3]] X_d3;  //bias covariates: Hwd
   matrix[n3,nB_d[4]] X_d4;  //bias covariates: Evg
   //NNGP spatial random effects
+  int nn_YX[n3,2];  //index for nn order vs Y&X order
   int<lower=1, upper=n3> M;  //number of neighbors
   int nn_id[M, n3];  //neighbor indices
   matrix[M, n3] nn_d;  //neighbor distances
@@ -120,7 +121,7 @@ transformed parameters {
   vector[L-1] Y2_[n1];
   vector[nB_p] beta_p;
   vector[n_beta_d] beta_d;
-    //NNGP parameters
+  //NNGP parameters
   matrix[M,n3] um[L-1];
   vector[n3] V[L-1];
   vector[n3] uw_dp[L-1];
@@ -131,22 +132,23 @@ transformed parameters {
     sig2[l] = square(sigma[l]);
     um[l] = exp(-phi[l] * nn_d);
     for(r in 1:dim_r) {
+      int gy[n_i[r]] = nn_YX[M_1[r]:M_2[r],1];  //XY index for matching
+      int gn = M_1[r] - 1;  //base for global nn index
       matrix[M_i[r],M_i[r]] exp_nn_dM[n_i[r]];
       matrix[M_i[r],M_i[r]] L_nn[n_i[r]];
       matrix[n_i[r],M_i[r]] L_u;
       matrix[n_i[r],M_i[r]] v_L;
       
       for(i in 1:n_i[r]) {
-        int i_g = i + M_1[r] - 1;  //global index
-        exp_nn_dM[i] = exp(-phi[l] * block(nn_dM_i[i_g],1,1,M_i[r],M_i[r]));
+        exp_nn_dM[i] = exp(-phi[l] * block(nn_dM_i[gn+i],1,1,M_i[r],M_i[r]));
         for(j in 1:M_i[r]) exp_nn_dM[i,j,j] = 1;
         L_nn[i] = cholesky_decompose(exp_nn_dM[i]);
-        L_u[i,] = mdivide_left_tri_low(L_nn[i], sub_col(um[l],1,i_g,M_i[r]))';
+        L_u[i,] = mdivide_left_tri_low(L_nn[i], sub_col(um[l],1,gn+i,M_i[r]))';
         v_L[i,] = mdivide_right_tri_low(L_u[i,], L_nn[i]);
       }
-      V[l,M_1[r]:M_2[r]] = 1 - rows_dot_self(L_u);
-      uw_dp[l,M_1[r]:M_2[r]] = rows_dot_product(v_L, 
-          to_matrix(w[l, to_array_1d(nn_id[1:M_i[r], M_1[r]:M_2[r]])], 
+      V[l,gy] = 1 - rows_dot_self(L_u);
+      uw_dp[l,gy] = rows_dot_product(v_L, 
+          to_matrix(w[l,to_array_1d(nn_id[1:M_i[r],M_1[r]:M_2[r]])], 
                     n_i[r], M_i[r]));
     }
   }
@@ -196,8 +198,7 @@ model {
   beta_d ~ normal(0, 0.1);
   
   //likelihood
-   Y1 ~ multi_normal_cholesky(Y2_, 
-                diag_pre_multiply(L_sigma, L_Omega));
+   Y1 ~ multi_normal_cholesky(Y2_, diag_pre_multiply(L_sigma, L_Omega));
 }
 
 generated quantities {
