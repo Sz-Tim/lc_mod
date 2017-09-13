@@ -187,12 +187,19 @@ get_index_dist <- function(s, M_r) {
   # s: coordinates as pixel column[,1] & row[,2]
   # M_r: neighborhood size as ± M_r rows & cols
   require(purrr)
+  # generate indices, order, & distances
   nn_index <- sapply(1:nrow(s), i_index, s, M_r)
   nn_order <- order(purrr::map_int(nn_index, length))
   nn_dist <- sapply(1:nrow(s), i_dist, nn_index, s)[nn_order]
+  # reorder
   nn_index <- nn_index[nn_order]
   s_nn <- s[nn_order,]
+  # create index map for nn vs all else
   n_M <- purrr::map_int(nn_index, length)
+  nn_YX <- cbind(nn_id=1:nrow(s), 
+                 XY_id=nn_order,
+                 nn_grp=as.numeric(as.factor(n_M)))
+  # reference for indexing nn operations by neighborhood size
   nn_M <- unique(n_M)
   n_M_ref <- matrix(nrow=length(nn_M), ncol=3)
   colnames(n_M_ref) <- c("nn_M", "i_start", "i_end")
@@ -200,7 +207,9 @@ get_index_dist <- function(s, M_r) {
     n_M_ref[r,] <- c(nn_M[r], range(which(n_M == nn_M[r])))
   }
   
-  return(list(i=nn_index, d=nn_dist, s_nn=s_nn, n_M_ref=n_M_ref))
+  return(list(i=nn_index, d=nn_dist, 
+              s_nn=s_nn, n_M_ref=n_M_ref, 
+              nn_YX=nn_YX))
 }
 
 get_neardistM <- function (i, id_d_M, M_r) {
@@ -237,6 +246,5 @@ get_nearind <- function (i, id_d_M, M_r) {
   D_i[1:n_nn] <- c(id_d_M$i[[i]])[1:n_nn]
   return( D_i)
 }
-
 
 
