@@ -195,11 +195,25 @@ gg.nu %<>% mutate(Y1=t(rbind(Y1.fit, Y1.new)) %>% c %>% rep(each=nGG),
                   Set=c("Y1+Y2", "Y2") %>% rep(times=c(nFit, nNew)*nGG*6)) %>%
   mutate(BlockRow=cb.i$BlockRow[match(.$BlockID, cb.i$BlockID)], 
          BlockCol=cb.i$BlockCol[match(.$BlockID, cb.i$BlockID)])
+gg.w <- ggs(out, "w") %>% arrange(Parameter, Chain, Iteration)
+gg.w %<>% mutate(Y2=t(Y2) %>% c %>% rep(each=nGG),
+                  LC=1:5 %>% rep(each=nGG) %>% rep(each=n$tot),
+                  BlockID=pop00$BlockID[n$all] %>% rep(each=nGG) %>% rep(times=5),
+                  CellID=1:length(n$all) %>% rep(each=nGG) %>% rep(times=5),
+                  Set=c("Y1+Y2", "Y2") %>% rep(times=c(nFit, nNew)*nGG*5)) %>%
+  mutate(BlockRow=cb.i$BlockRow[match(.$BlockID, cb.i$BlockID)], 
+         BlockCol=cb.i$BlockCol[match(.$BlockID, cb.i$BlockID)])
 
 # Medians
 gg.med <- gg.nu %>% 
   group_by(CellID, BlockID, BlockRow, BlockCol, LC, Set, Parameter) %>%
   summarise(Y1=first(Y1), med=median(value), 
+            q05=quantile(value, 0.05), q25=quantile(value, 0.25),
+            q75=quantile(value, 0.75), q95=quantile(value, 0.95)) %>%
+  ungroup() %>% group_by(BlockID)
+gg.med.w <- gg.w %>% 
+  group_by(CellID, BlockID, BlockRow, BlockCol, LC, Set, Parameter) %>%
+  summarise(Y2=first(Y2), med=median(value), 
             q05=quantile(value, 0.05), q25=quantile(value, 0.25),
             q75=quantile(value, 0.75), q95=quantile(value, 0.95)) %>%
   ungroup() %>% group_by(BlockID)
