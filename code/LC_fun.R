@@ -196,8 +196,7 @@ get_index_dist <- function(s, M_r) {
   s_nn <- s[nn_order,]
   # create index map for nn vs all else
   n_M <- purrr::map_int(nn_index, length)
-  nn_YX <- cbind(nn_id=1:nrow(s), 
-                 XY_id=nn_order,
+  nn_YX <- cbind(XY_id=nn_order,
                  nn_grp=as.numeric(as.factor(n_M)))
   # reference for indexing nn operations by neighborhood size
   nn_M <- unique(n_M)
