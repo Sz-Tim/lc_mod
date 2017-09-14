@@ -5,7 +5,7 @@ output: html_document
 ---
 
 ```{r setup, include=FALSE}
-library(sevcheck)
+if(!require("sevcheck")) devtools::install_github("Sz-Tim/sevcheck")
 p_load("tidyverse", "magrittr", "forcats", "rstan", "ggmcmc", "stringr")
 rstan_options(auto_write=TRUE); options(mc.cores=parallel::detectCores())
 source("code/LC_fun.R"); source("code/stan_utilities.R"); theme_set(theme_bw())
