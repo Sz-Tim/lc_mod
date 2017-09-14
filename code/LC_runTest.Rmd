@@ -154,7 +154,7 @@ nn_dM <- sapply(1:n$tot, get_neardistM, id_d_M, M_r)
 nn_d <- sapply(1:n$tot, get_neardist, id_d_M, M_r)
 nn_id <- sapply(1:n$tot, get_nearind, id_d_M, M_r)
 nn_dim <- colSums(nn_d > 0)
-nn_YX <- id_d_M$nn_grp_index
+nn_YX <- id_d_M$nn_YX
 ```
 
 
@@ -202,7 +202,8 @@ gg.w %<>% mutate(Y2=t(Y2) %>% c %>% rep(each=nGG),
                   LC=1:5 %>% rep(each=nGG) %>% rep(each=n$tot),
                   BlockID=pop00$BlockID[n$all] %>% rep(each=nGG) %>% rep(times=5),
                   CellID=1:length(n$all) %>% rep(each=nGG) %>% rep(times=5),
-                  Set=c("Y1+Y2", "Y2") %>% rep(times=c(nFit, nNew)*nGG*5)) %>%
+                  Set=c("Y1+Y2", "Y2") %>% rep(times=c(nFit, nNew)) %>%
+                   rep(each=nGG) %>% rep(times=5)) %>%
   mutate(BlockRow=cb.i$BlockRow[match(.$BlockID, cb.i$BlockID)], 
          BlockCol=cb.i$BlockCol[match(.$BlockID, cb.i$BlockID)])
 
@@ -271,17 +272,25 @@ gg.EvgMed %>% ungroup %>% group_by(Set, LC) %>%
 
 ```{r spatialError, fig.width=15, fig.height=3}
 ggplot(gg.med, aes(x=BlockCol, y=BlockRow)) + 
+  geom_tile(aes(fill=Y1, colour=Set)) + facet_grid(.~LC) +
+  scale_fill_gradient(limits=c(0, 1)) + 
+  scale_colour_manual(values=c("NA", "gray30"))
+ggplot(gg.med, aes(x=BlockCol, y=BlockRow)) + 
+  geom_tile(aes(fill=med, colour=Set)) + facet_grid(.~LC) +
+  scale_fill_gradient(limits=c(0, 1)) + 
+  scale_colour_manual(values=c("NA", "gray30"))
+ggplot(gg.med, aes(x=BlockCol, y=BlockRow)) + 
   geom_tile(aes(fill=med-Y1, colour=Set)) + facet_grid(.~LC) +
   scale_fill_gradient2(limits=c(-1, 1)) + 
-  scale_colour_manual(values=c("NA", "gray30")) #+
-  # geom_point(data=coords_star, aes(x=b.cols, y=b.rows), shape=1)
+  scale_colour_manual(values=c("NA", "gray30"))
 ggplot(gg.med, aes(x=BlockCol, y=BlockRow)) + 
   geom_tile(aes(fill=q95-q05, colour=Set)) + facet_grid(.~LC) +
-  # scale_fill_gradient(limits=c(0, 1)) + 
   scale_colour_manual(values=c("NA", "gray30"))
 ggplot(gg.med.w, aes(x=BlockCol, y=BlockRow)) + 
   geom_tile(aes(fill=med, colour=Set)) + facet_grid(.~LC) +
-  # scale_fill_gradient(limits=c(0, 1)) + 
+  scale_colour_manual(values=c("NA", "gray30"))
+ggplot(gg.med.w, aes(x=BlockCol, y=BlockRow)) + 
+  geom_tile(aes(fill=q95-q05, colour=Set)) + facet_grid(.~LC) +
   scale_colour_manual(values=c("NA", "gray30"))
 ```
 
