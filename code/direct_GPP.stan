@@ -131,6 +131,8 @@ transformed parameters {
             .* sqrt(eta_sq[l] + sig_sq[l]
                     - rows_dot_product(C_site_inv_Cstar[l], C_site_star[l])));
   }  
+  
+  
   //QR decompositions
   beta_p = R_inv_p * theta_p;
   beta_d[1:d1_2] = R_inv_d1 * theta_d[1:d1_2];
