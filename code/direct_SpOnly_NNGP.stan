@@ -41,14 +41,14 @@ data {
   //covariates
   matrix[n3,nB_p] X_p;  //pr(WP|Evg) covariates
   //NNGP spatial random effects
-  int nn_YX[n3,2];  //index for nn order vs Y&X order
+  int nn_YX[n3,3];  //index for nn order vs Y&X order
   int<lower=1, upper=n3> M;  //number of neighbors
   int nn_id[M, n3];  //neighbor indices
   matrix[M, n3] nn_d;  //neighbor distances
   matrix[(M*(M-1)/2), n3] nn_dM;  //neighbor distance matrix
   int nn_dim[n3];  //number of neighbors for each cell
-  int dim_r;  //number of unique neighborhood sizes
-  int dim_i[dim_r, 3];  //reference for neighborhood size index start & end
+  int dim_r;  //number of unique neighborhood distance matrices
+  int dim_i[dim_r, 4];  //reference for neighborhood matrix index start & end
 }
 
 transformed data {
@@ -57,23 +57,23 @@ transformed data {
   matrix[nB_p,nB_p] R_p = qr_R(X_p)[1:nB_p,] / sqrt(n3-1);
   matrix[nB_p,nB_p] R_inv_p = inverse(R_p);
   //NNGP neighborhood size indices
-  int M_i[dim_r] = dim_i[,1];  //neighborhood sizes: unique(nn_dim)
-  int M_1[dim_r] = dim_i[,2];  //neighborhood sizes: index starts
-  int M_2[dim_r] = dim_i[,3];  //neighborhood sizes: index ends
-  int n_i[dim_r];  //number of cells w/neighborhood size i
-  matrix[M,M] nn_dM_i[n3];
-  for(r in 1:dim_r) n_i[r] = M_2[r] - M_1[r] + 1;
-  //NNGP sub-matrix distances
-  for(i in 1:n3) {
+  int M_i[dim_r] = dim_i[,1];  //neighborhood sizes: number of neighbors
+  int M_mx[dim_r] = dim_i[,2];  //neighborhood sizes: unique dist mx's
+  int M_1[dim_r] = dim_i[,3];  //neighborhood sizes: index starts
+  int M_2[dim_r] = dim_i[,4];  //neighborhood sizes: index ends
+  int n_i[dim_r];  //number of cells w/neighborhood dist mx i
+  matrix[M,M] nn_dM_i[dim_r];  //unique distance matrices
+  for(r in 1:dim_r) {
     int h = 0;
-    nn_dM_i[i] = diag_matrix(rep_vector(1, M));
-    for(j in 1:(nn_dim[i]-1)) {
-      for(k in (j+1):nn_dim[i]) {
+    n_i[r] = M_2[r] - M_1[r] + 1;
+    nn_dM_i[r] = diag_matrix(rep_vector(1, M));
+    for(j in 1:(nn_dim[M_1[r]]-1)) {
+      for(k in (j+1):nn_dim[M_1[r]]) {
         h = h + 1;
-        nn_dM_i[i,j,k] = nn_dM[h,i];
-        nn_dM_i[i,k,j] = nn_dM[h,i];
-      } //close k
-    } //close j
+        nn_dM_i[r,j,k] = nn_dM[h,M_1[r]];
+        nn_dM_i[r,k,j] = nn_dM[h,M_1[r]];
+      }
+    }
   }
 }
 
@@ -104,24 +104,20 @@ transformed parameters {
     sig2[l] = square(sigma[l]);
     um[l] = exp(-phi[l] * nn_d);
     for(r in 1:dim_r) {
-      int gy[n_i[r]] = nn_YX[M_1[r]:M_2[r],1];  //XY index for matching
-      int gn = M_1[r] - 1;  //base for global nn index
-      matrix[M_i[r],M_i[r]] exp_nn_dM[n_i[r]];
-      matrix[M_i[r],M_i[r]] L_nn[n_i[r]];
-      matrix[n_i[r],M_i[r]] L_u;
-      matrix[n_i[r],M_i[r]] v_L;
+      int gy[n_i[r]] = nn_YX[M_1[r]:M_2[r],1];
+      matrix[M_i[r],M_i[r]] exp_nn_dM;
+      row_vector[M_i[r]] L_u;
+      vector[M_i[r]] v_L;
+      matrix[M_i[r],M_i[r]] L_nn;
       
-      for(i in 1:n_i[r]) {
-        exp_nn_dM[i] = exp(-phi[l] * block(nn_dM_i[gn+i],1,1,M_i[r],M_i[r]));
-        for(j in 1:M_i[r]) exp_nn_dM[i,j,j] = 1;
-        L_nn[i] = cholesky_decompose(exp_nn_dM[i]);
-        L_u[i,] = mdivide_left_tri_low(L_nn[i], sub_col(um[l],1,gn+i,M_i[r]))';
-        v_L[i,] = mdivide_right_tri_low(L_u[i,], L_nn[i]);
-      }
-      V[l,gy] = 1 - rows_dot_self(L_u);
-      uw_dp[l,gy] = rows_dot_product(v_L, 
-          to_matrix(w[l,to_array_1d(nn_id[1:M_i[r],M_1[r]:M_2[r]])], 
-                    n_i[r], M_i[r]));
+      exp_nn_dM = exp(-phi[l] * block(nn_dM_i[r],1,1,M_i[r],M_i[r]));
+      for(j in 1:M_i[r]) exp_nn_dM[j,j] = 1;
+      L_nn = cholesky_decompose(exp_nn_dM);
+      L_u = mdivide_left_tri_low(L_nn, sub_col(um[l],1,M_1[r],M_i[r]))';
+      v_L = mdivide_right_tri_low(L_u, L_nn)';
+      V[l,gy] = rep_vector(1 - dot_self(L_u), n_i[r]);
+      uw_dp[l,gy] = to_matrix(w[l,to_array_1d(nn_id[1:M_i[r],M_1[r]:M_2[r]])], 
+                    n_i[r], M_i[r]) * v_L;
     }
   }
   
