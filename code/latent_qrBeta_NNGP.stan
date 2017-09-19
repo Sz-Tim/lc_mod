@@ -88,19 +88,18 @@ transformed data {
   int M_1[dim_r] = dim_i[,3];  //neighborhood sizes: index starts
   int M_2[dim_r] = dim_i[,4];  //neighborhood sizes: index ends
   int n_i[dim_r];  //number of cells w/neighborhood dist mx i
-  matrix[M,M] nn_dM_i[n3];
-  for(r in 1:dim_r) n_i[r] = M_2[r] - M_1[r] + 1;
-  //NNGP sub-matrix distances
-  for(i in 1:n3) {
+  matrix[M,M] nn_dM_i[dim_r];  //unique distance matrices
+  for(r in 1:dim_r) {
     int h = 0;
-    nn_dM_i[i] = diag_matrix(rep_vector(1, M));
-    for(j in 1:(nn_dim[i]-1)) {
-      for(k in (j+1):nn_dim[i]) {
+    n_i[r] = M_2[r] - M_1[r] + 1;
+    nn_dM_i[r] = diag_matrix(rep_vector(1, M));
+    for(j in 1:(nn_dim[M_1[r]]-1)) {
+      for(k in (j+1):nn_dim[M_1[r]]) {
         h = h + 1;
-        nn_dM_i[i,j,k] = nn_dM[h,i];
-        nn_dM_i[i,k,j] = nn_dM[h,i];
-      } //close k
-    } //close j
+        nn_dM_i[r,j,k] = nn_dM[h,M_1[r]];
+        nn_dM_i[r,k,j] = nn_dM[h,M_1[r]];
+      }
+    }
   }
 }
 
@@ -139,20 +138,17 @@ transformed parameters {
       int gy[n_i[r]] = nn_YX[M_1[r]:M_2[r],1];
       matrix[M_i[r],M_i[r]] exp_nn_dM;
       row_vector[M_i[r]] L_u;
-      matrix[n_i[r],M_i[r]] v_L;
-      row_vector[M_i[r]] v_L_i;
+      vector[M_i[r]] v_L;
       matrix[M_i[r],M_i[r]] L_nn;
       
-      exp_nn_dM = exp(-phi[l] * block(nn_dM_i[M_1[r]],1,1,M_i[r],M_i[r]));
+      exp_nn_dM = exp(-phi[l] * block(nn_dM_i[r],1,1,M_i[r],M_i[r]));
       for(j in 1:M_i[r]) exp_nn_dM[j,j] = 1;
       L_nn = cholesky_decompose(exp_nn_dM);
       L_u = mdivide_left_tri_low(L_nn, sub_col(um[l],1,M_1[r],M_i[r]))';
-      v_L_i = mdivide_right_tri_low(L_u, L_nn);
-      v_L = rep_matrix(v_L_i, n_i[r]);
+      v_L = mdivide_right_tri_low(L_u, L_nn)';
       V[l,gy] = rep_vector(1 - dot_self(L_u), n_i[r]);
-      uw_dp[l,gy] = rows_dot_product(v_L, 
-          to_matrix(w[l,to_array_1d(nn_id[1:M_i[r],M_1[r]:M_2[r]])], 
-                    n_i[r], M_i[r]));
+      uw_dp[l,gy] = to_matrix(w[l,to_array_1d(nn_id[1:M_i[r],M_1[r]:M_2[r]])], 
+                    n_i[r], M_i[r]) * v_L;
     }
   }
   
