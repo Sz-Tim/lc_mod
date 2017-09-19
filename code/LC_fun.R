@@ -189,23 +189,28 @@ get_index_dist <- function(s, M_r) {
   require(purrr)
   # generate indices, order, & distances
   nn_index <- sapply(1:nrow(s), i_index, s, M_r)
-  nn_order <- order(purrr::map_int(nn_index, length))
-  nn_dist <- sapply(1:nrow(s), i_dist, nn_index, s)[nn_order]
+  nn_order1 <- order(purrr::map_int(nn_index, length))
+  nn_dist <- sapply(1:nrow(s), i_dist, nn_index, s)[nn_order1]
+  nn_order2 <- order(match(nn_dist, nn_dist))
+  nn_dist <- nn_dist[nn_order2]
+  nn_order <- nn_order1[nn_order2]
   # reorder
   nn_index <- nn_index[nn_order]
   s_nn <- s[nn_order,]
   # create index map for nn vs all else
   n_M <- purrr::map_int(nn_index, length)
   nn_YX <- cbind(XY_id=nn_order,
-                 nn_grp=as.numeric(as.factor(n_M)))
-  # reference for indexing nn operations by neighborhood size
-  nn_M <- unique(n_M)
-  n_M_ref <- matrix(nrow=length(nn_M), ncol=3)
-  colnames(n_M_ref) <- c("nn_M", "i_start", "i_end")
-  for(r in 1:length(nn_M)) {
-    n_M_ref[r,] <- c(nn_M[r], range(which(n_M == nn_M[r])))
-  }
+                 nn_d_grp=match(nn_dist, nn_dist) %>% as.factor %>% as.numeric,
+                 nn_M_grp=as.numeric(as.factor(n_M)))
   
+  # reference for indexing nn operations by neighborhood distance matrix
+  nn_unique_dist <- unique(nn_dist)
+  n_M_ref <- matrix(nrow=length(nn_unique_dist), ncol=4)
+  colnames(n_M_ref) <- c("nn_M", "dist_mx_id", "i_start", "i_end")
+  for(r in 1:length(nn_unique_dist)) {
+    n_M_ref[r,] <- c(nrow(as.matrix(nn_unique_dist[[r]]))-1, r,
+                     range(which(nn_YX[,2] == r)))
+  }
   return(list(i=nn_index, d=nn_dist, 
               s_nn=s_nn, n_M_ref=n_M_ref, 
               nn_YX=nn_YX))

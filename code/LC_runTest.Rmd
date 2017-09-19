@@ -135,8 +135,8 @@ coords <- data.frame(b.cols, b.rows)
 #D <- as.matrix(dist(coords))
 
 # knots
-m.cols <- 13
-m.rows <- 10
+m.cols <- 12
+m.rows <- 9
 m <- m.rows * m.cols
 coords_star <- place_knots(m.cols, m.rows, coords)
 D_star <- as.matrix(dist(coords_star))
@@ -167,9 +167,9 @@ d <- list(n1=nFit, n2=nFit+1, n3=n$tot, L=6, nB_d=nBd, nB_p=nBp,
           nn_dim=nn_dim, dim_r=nrow(id_d_M$n_M_ref), dim_i=id_d_M$n_M_ref,
           X_d1=Xd[[1]], X_d2=Xd[[2]], X_d3=Xd[[3]], X_d4=Xd[[4]], X_p=Xp)
 stan_rdump(ls(d), file="code/all_data.Rdump", envir=list2env(d))
-out <- stan(file="code/latent_qrBeta_GPP.stan", init=0, thin=1,
+out <- stan(file="code/latent_qrBeta.stan", init=0, thin=20,
             data=read_rdump("code/all_data.Rdump"), 
-            iter=500, warmup=250, chains=1, seed=43337, refresh=5,
+            iter=2000, warmup=1000, chains=2, seed=43337, refresh=50,
             include=FALSE, pars=c("Y2_", "Y2new_", "nu", "sig_sq", "eta_sq",
                                   "e_z", "w_z", "w_star", "V", "uw_dp", "um", 
                                   "Cstar", "C_site_inv_Cstar", "C_site_star"))
