@@ -144,23 +144,22 @@ transformed parameters {
 }
 
 model {
-  //NNGP
+  //NNGP pamareters
   sigma ~ normal(0, 1);
   phi ~ normal(0, 1);
   for(l in 1:(L-1)) {
-    target += sum(-0.5*log(V[l]) - 0.5/sig2[l]*(square(w[l]-uw_dp[l]) ./ V[l])) 
-            - 0.5*n3*log(sig2[l]);
+    //NNGP w
+    target += sum(-0.5*log(V[l,1:n1]) 
+              - 0.5/sig2[l]*(square(w[l,1:n1]-uw_dp[l,1:n1]) ./ V[l,1:n1])) 
+              - 0.5*n1*log(sig2[l]);
+    //nu priors
+    nu[,l] ~ normal(0.5, 1);
   }
   
-  //covariance priors
+  //covariance parameters
   for(j in 1:2) {
     L_Omega[j] ~ lkj_corr_cholesky(8);
     L_sigma[j] ~ normal(0, 1);
-  }
- 
-  //nu priors
-  for(l in 1:(L-1)) {
-    nu[,l] ~ normal(0.5, 1);
   }
   
   //beta priors
