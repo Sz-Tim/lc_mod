@@ -1,4 +1,5 @@
 functions {
+  //GJAM transformation to enforce compositional restrictions
   vector tr_gjam_inv(vector w) {
     vector[6] eta;
     vector[5] w_p_;
@@ -77,19 +78,17 @@ transformed data {
 parameters {
   //landcover: covariance
   cholesky_factor_corr[L-1] L_Omega; 
-  vector<lower=0>[L-1] L_sigma;  
+  vector<lower=0>[L-1] L_sigma; 
   //betas
   vector[nB_p] theta_p;  //pr(WP|Evg) betas (QR decomposition)
-  vector[n_beta_d] theta_d;  //bias betas (QR decomposition)
+  vector[n_beta_d] theta_d;  //bias thetas
 }
 
 transformed parameters {
   //NLCD de-biasing and splitting
-  vector<lower=-1, upper=2>[L-1] Y2_[n1];
-  //betas
+  vector[L-1] Y2_[n1];
   vector[nB_p] beta_p;
   vector[n_beta_d] beta_d;
-
   
   //QR decompositions
   beta_p = R_inv_p * theta_p;
@@ -97,19 +96,19 @@ transformed parameters {
   beta_d[d2_1:d2_2] = R_inv_d2 * theta_d[d2_1:d2_2];
   beta_d[d3_1:d3_2] = R_inv_d3 * theta_d[d3_1:d3_2];
   beta_d[d4_1:d4_2] = R_inv_d4 * theta_d[d4_1:d4_2];
-  
 
+  //split and de-bias Y2
   Y2_[,1] = to_array_1d(to_vector(Y2[1:n1,1]) 
-      + (Q_d1[1:n1] * theta_d[1:d1_2]));
+      + (Q_d1[1:n1,] * theta_d[1:d1_2]));
   Y2_[,2] = to_array_1d(to_vector(Y2[1:n1,2]) 
-      + (Q_d2[1:n1] * theta_d[d2_1:d2_2]));
+      + (Q_d2[1:n1,] * theta_d[d2_1:d2_2]));
   Y2_[,3] = to_array_1d(to_vector(Y2[1:n1,3]) 
-      + (Q_d3[1:n1] * theta_d[d3_1:d3_2]));
+      + (Q_d3[1:n1,] * theta_d[d3_1:d3_2]));
   Y2_[,4] = to_array_1d((to_vector(Y2[1:n1,4]) 
-      + (Q_d4[1:n1] * theta_d[d4_1:d4_2]))
+          + (Q_d4[1:n1,] * theta_d[d4_1:d4_2])) 
         .* inv_logit(Q_p[1:n1] * theta_p));
   Y2_[,5] = to_array_1d((to_vector(Y2[1:n1,4]) 
-      + (Q_d4[1:n1] * theta_d[d4_1:d4_2]))
+          + (Q_d4[1:n1,] * theta_d[d4_1:d4_2])) 
         .* (1 - inv_logit(Q_p[1:n1] * theta_p)));  
 }
 
@@ -123,27 +122,30 @@ model {
   beta_d ~ normal(0, 0.1);
   
   //likelihood
-   Y1 ~ multi_normal_cholesky(Y2_, diag_pre_multiply(L_sigma, L_Omega));
+  for(i in 1:n1) {
+    Y1[i] ~ multi_normal_cholesky(Y2_[i], diag_pre_multiply(L_sigma, L_Omega));
+  }
+   
 }
 
 generated quantities {
   //landcover: latent compositional
-  vector<lower=-1, upper=2>[L-1] Y2new_[n3-n1];
+  vector[L-1] Y2new_[n3-n1];
   simplex[L] n_eta[n3];
-  
-  Y2new_[,1] = to_array_1d(to_vector(Y2[n2:n3,1]) 
-      + (Q_d1[n2:n3] * theta_d[1:d1_2]));
-  Y2new_[,2] = to_array_1d(to_vector(Y2[n2:n3,2]) 
-      + (Q_d2[n2:n3] * theta_d[d2_1:d2_2]));
-  Y2new_[,3] = to_array_1d(to_vector(Y2[n2:n3,3]) 
-      + (Q_d3[n2:n3] * theta_d[d3_1:d3_2]));
-  Y2new_[,4] = to_array_1d((to_vector(Y2[n2:n3,4]) 
-      + (Q_d4[n2:n3] * theta_d[d4_1:d4_2]))
+
+  Y2new_[,1] = to_array_1d(to_vector(Y2[n2:n3,1])
+      + (Q_d1[n2:n3,] * theta_d[1:d1_2]));
+  Y2new_[,2] = to_array_1d(to_vector(Y2[n2:n3,2])
+      + (Q_d2[n2:n3,] * theta_d[d2_1:d2_2]));
+  Y2new_[,3] = to_array_1d(to_vector(Y2[n2:n3,3])
+      + (Q_d3[n2:n3,] * theta_d[d3_1:d3_2]));
+  Y2new_[,4] = to_array_1d((to_vector(Y2[n2:n3,4])
+          + (Q_d4[n2:n3,] * theta_d[d4_1:d4_2])) 
         .* inv_logit(Q_p[n2:n3] * theta_p));
-  Y2new_[,5] = to_array_1d((to_vector(Y2[n2:n3,4]) 
-      + (Q_d4[n2:n3] * theta_d[d4_1:d4_2]))
-        .* (1 - inv_logit(Q_p[n2:n3] * theta_p))); 
-        
+  Y2new_[,5] = to_array_1d((to_vector(Y2[n2:n3,4])
+          + (Q_d4[n2:n3,] * theta_d[d4_1:d4_2])) 
+        .* (1 - inv_logit(Q_p[n2:n3] * theta_p)));
+
   for(n in 1:n1) {
     n_eta[n] = tr_gjam_inv(Y2_[n]);
   }
