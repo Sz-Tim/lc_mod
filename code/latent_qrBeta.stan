@@ -1,4 +1,5 @@
 functions {
+  //GJAM transformation to enforce compositional restrictions
   vector tr_gjam_inv(vector w) {
     vector[6] eta;
     vector[5] w_p_;
@@ -29,9 +30,9 @@ functions {
 
 data {
   //counts and indices
-  int n1;  //number of cells with Y1 & Y2
+  int n1;  //number of cells for GRANIT
   int n2;  //n1 + 1 (for indexing)
-  int n3;  //number of cells with only Y2
+  int n3;  //number of cells for NLCD + covariates
   int L;  //number of land cover classes
   int nB_d[L-2];  //number of bias covariates for each LC
   int nB_p;  //number of covariates for pr(WP|Evg)
@@ -45,6 +46,7 @@ data {
   matrix[n3,nB_d[3]] X_d3;  //bias covariates: Hwd
   matrix[n3,nB_d[4]] X_d4;  //bias covariates: Evg
 }
+
 transformed data {
   int n_beta_d = sum(nB_d);  //total number of beta_ds
   // indexes for bias betas
@@ -91,7 +93,6 @@ transformed parameters {
   vector[nB_p] beta_p;  //pr(WP|Evg) betas
   vector[n_beta_d] beta_d;  //bias betas
 
-  
   //QR decopmositions
   beta_p = R_inv_p * theta_p;
   beta_d[1:d1_2] = R_inv_d1 * theta_d[1:d1_2];
@@ -99,9 +100,7 @@ transformed parameters {
   beta_d[d3_1:d3_2] = R_inv_d3 * theta_d[d3_1:d3_2];
   beta_d[d4_1:d4_2] = R_inv_d4 * theta_d[d4_1:d4_2];
   
-  
   //correct bias & split WP to [,4] and Evg to [,5]
-  ////fit betas using cells with Y1 & Y2
   Y2_[1:n1,1] = to_array_1d(Y2[1:n1,1] + (Q_d1[1:n1,] * theta_d[1:d1_2]));
   Y2_[1:n1,2] = to_array_1d(Y2[1:n1,2] + (Q_d2[1:n1,] * theta_d[d2_1:d2_2]));
   Y2_[1:n1,3] = to_array_1d(Y2[1:n1,3] + (Q_d3[1:n1,] * theta_d[d3_1:d3_2]));
