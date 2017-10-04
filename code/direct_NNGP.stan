@@ -16,7 +16,7 @@ functions {
     w_p = sum(w_p_);
     
     if(w_p >= 0.99) {
-      D_i = (w_p^(-1)) * (1 - (0.01)^(w_p/0.99));
+      D_i = (1 - (0.01)^(w_p/0.99)) / w_p;
       while(sum(eta[1:5]) > 0.99) {
         vector[5] tmp;
         tmp = D_i * eta[1:5];
@@ -181,8 +181,8 @@ model {
   sigma ~ normal(0, 1);
   phi ~ normal(0, 1);
   for(l in 1:(L-1)) {
-    target += sum(-0.5*log(V[l]) - 0.5/sig2[l]*(square(w[l]-uw_dp[l]) ./ V[l])) 
-            - 0.5*n3*log(sig2[l]);
+    target += -0.5 * (n3*log(sig2[l]) + sum(log(V[l])) 
+                      + sum(square(w[l]-uw_dp[l]) ./ V[l]) / sig2[l]);
   }
   
   //covariance priors
