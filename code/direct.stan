@@ -16,7 +16,7 @@ functions {
     w_p = sum(w_p_);
     
     if(w_p >= 0.99) {
-      D_i = (w_p^(-1)) * (1 - (0.01)^(w_p/0.99));
+      D_i = (1 - (0.01)^(w_p/0.99)) / w_p;
       while(sum(eta[1:5]) > 0.99) {
         vector[5] tmp;
         tmp = D_i * eta[1:5];
@@ -123,7 +123,6 @@ model {
   
   //likelihood
   for(i in 1:n1) {
-    Y1[i] ~ multi_normal_cholesky(Y2_[i], diag_pre_multiply(L_sigma, L_Omega));
   }
    
 }
