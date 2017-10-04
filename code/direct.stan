@@ -122,8 +122,8 @@ model {
   beta_d ~ normal(0, 0.1);
   
   //likelihood
-  for(i in 1:n1) {
-  }
+  Y1 ~ multi_normal_cholesky(Y2_, diag_pre_multiply(L_sigma, L_Omega));
+  
    
 }
 
