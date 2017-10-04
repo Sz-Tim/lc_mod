@@ -85,7 +85,7 @@ parameters {
 
 transformed parameters {
   //NLCD de-biasing and splitting
-  vector<lower=-1, upper=2>[L-1] Y2_[n1];
+  vector[L-1] Y2_[n1];
   //betas
   vector[nB_p] beta_p;
   vector[n_beta_d] beta_d;
@@ -128,7 +128,7 @@ model {
 
 generated quantities {
   //landcover: latent compositional
-  vector<lower=-1, upper=2>[L-1] Y2new_[n3-n1];
+  vector[L-1] Y2new_[n3-n1];
   simplex[L] n_eta[n3];
   
   Y2new_[,1] = to_array_1d(to_vector(Y2[n2:n3,1]) 
