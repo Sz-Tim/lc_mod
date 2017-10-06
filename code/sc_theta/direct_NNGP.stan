@@ -128,7 +128,7 @@ transformed parameters {
   real<lower=0> sig2[L-1];
   
   //scaled theta since Y1-Y2 is very small
-  theta_d = theta_d_raw * theta_d_sigma;
+  theta_d = theta_d_z * theta_d_scale;
   
   //NNGP calculations
   for(l in 1:(L-1)) {
