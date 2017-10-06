@@ -174,7 +174,6 @@ model {
   phi ~ normal(0, 1);
   for(l in 1:(L-1)) {
     w_scale[l] ~ normal(0, 1);
-    w[l] ~ normal(0, 1);
     target += -0.5 * (n3*log(sig2[l]) + sum(log(V[l])) 
                       + sum(square(w[l]-uw_dp[l]) ./ V[l]) / sig2[l]);
   }
