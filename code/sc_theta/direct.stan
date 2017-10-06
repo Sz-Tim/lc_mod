@@ -134,7 +134,7 @@ generated quantities {
 
   Y2new_[,1] = to_array_1d(Y2[n2:n3,1] + (Q_d1[n2:n3,] * theta_d[1:d1_2]));
   Y2new_[,2] = to_array_1d(Y2[n2:n3,2] + (Q_d2[n2:n3,] * theta_d[d2_1:d2_2]));
-  Y2new_[,3] = to_array_1d(Y2[n2:n3,3]) + (Q_d3[n2:n3,] * theta_d[d3_1:d3_2]));
+  Y2new_[,3] = to_array_1d(Y2[n2:n3,3] + (Q_d3[n2:n3,] * theta_d[d3_1:d3_2]));
   Y2new_[,4] = to_array_1d((Y2[n2:n3,4] + (Q_d4[n2:n3,] * theta_d[d4_1:d4_2])) 
         .* inv_logit(Q_p[n2:n3] * theta_p));
   Y2new_[,5] = to_array_1d((Y2[n2:n3,4] + (Q_d4[n2:n3,] * theta_d[d4_1:d4_2])) 
