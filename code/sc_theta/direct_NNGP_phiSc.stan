@@ -113,7 +113,8 @@ parameters {
   real<lower=0> theta_d_scale;  //scale for bias betas since Y1-Y2 is very small
   //NNGP
   real<lower=0> sigma[L-1];  //sqrt(nugget)
-  real<lower=0> phi[L-1];  //decay rate
+  real<lower=0> phi_z[L-1];  //decay rate
+  real<lower=0> phi_scale;
   vector[n3] w[L-1];  //spatial effects
 }
 
@@ -126,12 +127,14 @@ transformed parameters {
   vector[n3] V[L-1];
   vector[n3] uw_dp[L-1];
   real<lower=0> sig2[L-1];
+  real<lower=0> phi[L-1];
   
   //scaled theta since Y1-Y2 is very small
   theta_d = theta_d_z * theta_d_scale;
   
   //NNGP calculations
   for(l in 1:(L-1)) {
+    phi[l] = phi_z[l] * phi_scale;
     sig2[l] = square(sigma[l]);
     um[l] = exp(-phi[l] * nn_d);
     for(r in 1:dim_r) {
@@ -170,7 +173,8 @@ transformed parameters {
 model {
   //NNGP
   sigma ~ normal(0, 1);
-  phi ~ normal(0, 1);
+  phi_z ~ normal(0, 1);
+  phi_scale ~ normal(0, 1);
   for(l in 1:(L-1)) {
     target += -0.5 * (n3*log(sig2[l]) + sum(log(V[l])) 
                       + sum(square(w[l]-uw_dp[l]) ./ V[l]) / sig2[l]);
