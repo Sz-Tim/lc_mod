@@ -38,7 +38,7 @@ data {
   int nB_p;  //number of covariates for pr(WP|Evg)
   //landcover: observed
   vector<lower=0, upper=1>[L-1] Y1[n1];  //GRANIT proportions
-  vector<lower=0, upper=1>[L-2] Y2[n3];  //NLCD proportions
+  matrix[n3,L-2] Y2;
   //covariates
   matrix[n3,nB_p] X_p;  //pr(WP|Evg) covariates
   matrix[n3,nB_d[1]] X_d1;  //bias covariates: Dev
