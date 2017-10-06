@@ -111,8 +111,8 @@ parameters {
   vector[L-1] nu[n1];
   //thetas: QR decomposition slopes
   vector[nB_p] theta_p;  //pr(WP|Evg) betas (QR decomposition)
-  vector[n_beta_d] theta_d_raw;  //bias betas (QR decomposition)
-  real<lower=0> theta_d_sigma;
+  vector[n_beta_d] theta_d_z;  //bias betas (QR decomposition)
+  real<lower=0> theta_d_scale;
   //NNGP
   real<lower=0> sigma[L-1];  //sqrt(nugget)
   real<lower=0> phi[L-1];  //decay rate
@@ -130,7 +130,7 @@ transformed parameters {
   real<lower=0> sig2[L-1];
   
   //scaling bias thetas since Y1-Y2 is very small
-  theta_d = theta_d_raw * theta_d_sigma;
+  theta_d = theta_d_z * theta_d_scale;
   
   //NNGP calculations
   for(l in 1:(L-1)) {
@@ -155,23 +155,18 @@ transformed parameters {
   }
   
   //split and de-bias Y2
-  Y2_[1:n1,1] = to_array_1d(Y2[1:n1,1] 
-      + (Q_d1[1:n1,] * theta_d[1:d1_2]) 
-      + w[1,1:n1]);
-  Y2_[1:n1,2] = to_array_1d(Y2[1:n1,2] 
-      + (Q_d2[1:n1,] * theta_d[d2_1:d2_2])
-      + w[2,1:n1]);
-  Y2_[1:n1,3] = to_array_1d(Y2[1:n1,3] 
-      + (Q_d3[1:n1,] * theta_d[d3_1:d3_2])
-      + w[3,1:n1]);
-  Y2_[1:n1,4] = to_array_1d((Y2[1:n1,4] 
-          + (Q_d4[1:n1,] * theta_d[d4_1:d4_2])) 
-        .* inv_logit(Q_p[1:n1,] * theta_p)
-      + w[4,1:n1]);
-  Y2_[1:n1,5] = to_array_1d((Y2[1:n1,4] 
-          + (Q_d4[1:n1,] * theta_d[d4_1:d4_2])) 
-        .* (1-inv_logit(Q_p[1:n1,] * theta_p))
-      + w[5,1:n1]);
+  Y2_[1:n1,1] = to_array_1d(Y2[1:n1,1] + (Q_d1[1:n1,] * theta_d[1:d1_2]) 
+                            + w[1,1:n1]);
+  Y2_[1:n1,2] = to_array_1d(Y2[1:n1,2] + (Q_d2[1:n1,] * theta_d[d2_1:d2_2])
+                            + w[2,1:n1]);
+  Y2_[1:n1,3] = to_array_1d(Y2[1:n1,3] + (Q_d3[1:n1,] * theta_d[d3_1:d3_2])
+                            + w[3,1:n1]);
+  Y2_[1:n1,4] = to_array_1d((Y2[1:n1,4] + (Q_d4[1:n1,] * theta_d[d4_1:d4_2])) 
+                             .* inv_logit(Q_p[1:n1,] * theta_p)
+                            + w[4,1:n1]);
+  Y2_[1:n1,5] = to_array_1d((Y2[1:n1,4] + (Q_d4[1:n1,] * theta_d[d4_1:d4_2])) 
+                             .* (1-inv_logit(Q_p[1:n1,] * theta_p))
+                            + w[5,1:n1]);
 }
 
 model {
@@ -196,8 +191,8 @@ model {
   
   //beta priors
   theta_p ~ normal(0, 1);
-  theta_d_raw ~ normal(0, 1);
-  theta_d_sigma ~ normal(0, 1);
+  theta_d_z ~ normal(0, 1);
+  theta_d_scale ~ normal(0, 1);
   
   //likelihood
    Y1 ~ multi_normal_cholesky(nu, diag_pre_multiply(L_sigma[1], L_Omega[1]));
@@ -219,23 +214,18 @@ generated quantities {
   beta_d[d3_1:d3_2] = R_inv_d3 * theta_d[d3_1:d3_2];
   beta_d[d4_1:d4_2] = R_inv_d4 * theta_d[d4_1:d4_2];
   
-  Y2new_[,1] = to_array_1d(Y2[n2:n3,1] 
-      + (Q_d1[n2:n3,] * theta_d[1:d1_2])
-      + w[1,n2:n3]);
-  Y2new_[,2] = to_array_1d(Y2[n2:n3,2] 
-      + (Q_d2[n2:n3,] * theta_d[d2_1:d2_2])
-      + w[1,n2:n3]);
-  Y2new_[,3] = to_array_1d(Y2[n2:n3,3] 
-      + (Q_d3[n2:n3,] * theta_d[d3_1:d3_2])
-      + w[1,n2:n3]);
-  Y2new_[,4] = to_array_1d((Y2[n2:n3,4] 
-          + (Q_d4[n2:n3,] * theta_d[d4_1:d4_2])) 
-        .* inv_logit(Q_p[n2:n3,] * theta_p)
-      + w[1,n2:n3]);
-  Y2new_[,5] = to_array_1d((Y2[n2:n3,4] 
-          + (X_d4[n2:n3,] * theta_d[d4_1:d4_2])) 
-        .* (1-inv_logit(Q_p[n2:n3,] * theta_p))
-      + w[1,n2:n3]);
+  Y2new_[,1] = to_array_1d(Y2[n2:n3,1] + (Q_d1[n2:n3,] * theta_d[1:d1_2])
+                           + w[1,n2:n3]);
+  Y2new_[,2] = to_array_1d(Y2[n2:n3,2] + (Q_d2[n2:n3,] * theta_d[d2_1:d2_2])
+                           + w[1,n2:n3]);
+  Y2new_[,3] = to_array_1d(Y2[n2:n3,3] + (Q_d3[n2:n3,] * theta_d[d3_1:d3_2])
+                           + w[1,n2:n3]);
+  Y2new_[,4] = to_array_1d((Y2[n2:n3,4] + (Q_d4[n2:n3,] * theta_d[d4_1:d4_2])) 
+                            .* inv_logit(Q_p[n2:n3,] * theta_p)
+                           + w[1,n2:n3]);
+  Y2new_[,5] = to_array_1d((Y2[n2:n3,4] + (X_d4[n2:n3,] * theta_d[d4_1:d4_2])) 
+                            .* (1-inv_logit(Q_p[n2:n3,] * theta_p))
+                           + w[1,n2:n3]);
   
   for(n in 1:n1) {
     n_eta[n] = tr_gjam_inv(nu[n]);
