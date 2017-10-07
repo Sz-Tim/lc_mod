@@ -9,7 +9,7 @@ td <- rep(10:11, 3)
 run_stan <- function(mod, td, nChain=1, iter=2, warmup=1) {
   out <- stan(file=paste0("code/", mod), 
        data=read_rdump("code/all_data.Rdump"), 
-       iter=iter, warmup=warmup, chains=nChain, seed=43337, init=0,
+       iter=iter, warmup=warmup, chains=nChain, seed=4337, init=0,
        control=list(max_treedepth=td),
        include=FALSE, pars=c("Y2_", "Y2new_", "nu","V", "uw_dp", "um"))
   return(out)
@@ -46,7 +46,7 @@ out.gg <- map(out.ls, ~(ggs(., "n_eta") %>%
                           ungroup() %>% group_by(BlockID)))
 
 map_df(out.ls, get_elapsed_time) %>% t %>% cbind(rowSums(.))
-map(out.ls, ~(sum(get_elapsed_time(.))/summary(., pars="lp__")$summary[9]))
+map_dbl(out.ls, ~(sum(get_elapsed_time(.))/summary(., pars="lp__")$summary[9]))
 map(out.ls, check_treedepth)
 map(out.ls, check_div)
 
@@ -64,3 +64,9 @@ map(out.gg, ~(ggplot(., aes(x=BlockCol, y=BlockRow)) +
                 geom_tile(aes(fill=med-Y1, colour=Set)) + facet_grid(.~LC) +
                 scale_fill_gradient2(limits=c(-1, 1)) + 
                 scale_colour_manual(values=c("NA", "gray30"))))
+
+map(out.ls, ~plot(., pars="beta_d"))
+map(out.ls, stan_ess)
+map(out.ls, stan_diag)
+map(out.ls, stan_rhat)
+
