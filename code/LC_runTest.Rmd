@@ -168,10 +168,9 @@ d <- list(n1=nFit, n2=nFit+1, n3=n$tot, L=6, nB_d=nBd, nB_p=nBp,
           nn_dim=nn_dim, dim_r=nrow(id_d_M$n_M_ref), dim_i=id_d_M$n_M_ref,
           X_d1=Xd[[1]], X_d2=Xd[[2]], X_d3=Xd[[3]], X_d4=Xd[[4]], X_p=Xp)
 stan_rdump(ls(d), file="code/all_data.Rdump", envir=list2env(d))
-out <- stan(file="code/latent_qrBeta.stan", init=0, thin=20,
+out <- stan(file="code/sc_theta/direct.stan", init=0, thin=20,
             data=read_rdump("code/all_data.Rdump"), 
-            iter=10000, warmup=5000, chains=3, seed=43337, 
-            sample_file="out/PI_latent.csv",
+            iter=6000, warmup=3000, chains=3, seed=43337, refresh=100,
             include=FALSE, pars=c("Y2_", "Y2new_", "nu", "sig_sq", "eta_sq",
                                   "e_z", "w_z", "w_star", "V", "uw_dp", "um", 
                                   "Cstar", "C_site_inv_Cstar", "C_site_star"))
@@ -241,22 +240,26 @@ gg.EvgMed <- gg.EvgComb %>% group_by(CellID, BlockID, LC, Set) %>%
 ggplot(gg.EvgMed, aes(x=Y1, y=med)) + xlim(0,1) + ylim(0,1) + 
   geom_point(alpha=0.5) + facet_grid(Set~LC) + 
   geom_abline(slope=1, linetype=2, colour="red")
-ggplot(gg.EvgMed, aes(x=Y1, y=Y2)) + xlim(0,1) + ylim(0,1) + 
+Y2.p <- ggplot(gg.EvgMed, aes(x=Y1, y=Y2)) + xlim(0,1) + ylim(0,1) + 
   geom_point(alpha=0.5) + facet_grid(Set~LC) + 
   geom_abline(slope=1, linetype=2, colour="red")
+ggsave("out/Y2_Y1.jpg", Y2.p, height=10, width=25)
 ggplot(gg.EvgMed, aes(x=Y2, y=med)) + xlim(0,1) + ylim(0,1) + 
   geom_point(alpha=0.5) + facet_grid(Set~LC) + 
   geom_abline(slope=1, linetype=2, colour="red")
 
-ggplot(gg.med, aes(x=Y1, y=med, ymin=q25, ymax=q75)) + xlim(0,1) + ylim(0,1) + 
+sc.p <- ggplot(gg.med, aes(x=Y1, y=med, ymin=q25, ymax=q75)) + 
+  xlim(0,1) + ylim(0,1) + 
   geom_pointrange(alpha=0.5, colour="dodgerblue", fatten=1.5) + 
   geom_abline(slope=1, linetype=3) + facet_grid(Set~LC) 
-ggplot(gg.EvgMed, aes(x=Y1, xend=Y1, y=Y2, yend=med,
+ggsave("out/LC_direct.jpg", sc.p, height=10, width=25)
+c.p <- ggplot(gg.EvgMed, aes(x=Y1, xend=Y1, y=Y2, yend=med,
                       colour=abs(Y2-Y1)<abs(med-Y1))) + 
   geom_abline(slope=1, linetype=3) + facet_grid(Set~LC) +
   scale_colour_manual(values=c("darkgreen", "red")) + xlim(0,1) + ylim(0,1) +
   geom_segment(arrow=arrow(length=unit(0.1, "cm")), alpha=0.4) + 
   labs(x="Y1", y="Y2 -> median") + theme(legend.position="none")
+ggsave("out/comp_direct.jpg", c.p, height=10, width=25)
 
 
 ##########
@@ -264,20 +267,22 @@ ggplot(gg.EvgMed, aes(x=Y1, xend=Y1, y=Y2, yend=med,
 ##########
 
 gg.med %>% ungroup %>% group_by(Set, LC) %>%
-  summarise(rmse.mod=(med-Y1)^2 %>% mean %>% sqrt %>% round(3))
+  summarise(rmse.mod=(med-Y1)^2 %>% mean %>% sqrt %>% round(3)) %>%
+  write_csv("out/rmseY1_direct.csv")
 gg.EvgMed %>% ungroup %>% group_by(Set, LC) %>%
   summarise(rmse.mod=(med-Y1)^2 %>% mean %>% sqrt %>% round(3),
             rmse.Y2=(Y2-Y1)^2 %>% mean %>% sqrt %>% round(3),
-            diff=rmse.mod-rmse.Y2, prop=(diff/rmse.Y2) %>% round(3))
+            diff=rmse.mod-rmse.Y2, prop=(diff/rmse.Y2) %>% round(3)) %>%
+  write_csv("out/rmseY2_direct.csv")
 ```
 
 
 ```{r spatialError, fig.width=15, fig.height=3}
-ggplot(gg.med, aes(x=BlockCol, y=BlockRow)) + 
+sp.resid <- ggplot(gg.med, aes(x=BlockCol, y=BlockRow)) + 
   geom_tile(aes(fill=med-Y1, colour=Set)) + facet_grid(.~LC) +
   scale_fill_gradient2(limits=c(-1, 1)) + 
-  scale_colour_manual(values=c("NA", "gray30")) +
-  geom_point(data=coords_star, aes(x=b.cols, y=b.rows), shape=1)
+  scale_colour_manual(values=c("NA", "gray30"))
+ggsave("out/sp_resid_direct.jpg", sp.resid, height=5, width=25)
 ggplot(gg.med, aes(x=BlockCol, y=BlockRow)) + 
   geom_tile(aes(fill=q95-q05, colour=Set)) + facet_grid(.~LC) +
   scale_colour_manual(values=c("NA", "gray30")) +
