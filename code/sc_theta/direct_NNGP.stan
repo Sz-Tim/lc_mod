@@ -38,7 +38,7 @@ data {
   int nB_p;  //number of covariates for pr(WP|Evg)
   //landcover: observed
   vector<lower=0, upper=1>[L-1] Y1[n1];  //GRANIT proportions
-  vector<lower=0, upper=1>[L-2] Y2[n3];  //NLCD proportions
+  matrix[n3,L-2] Y2;
   //covariates
   matrix[n3,nB_p] X_p;  //pr(WP|Evg) covariates
   matrix[n3,nB_d[1]] X_d1;  //bias covariates: Dev
@@ -109,8 +109,8 @@ parameters {
   vector<lower=0>[L-1] L_sigma; 
   //betas
   vector[nB_p] theta_p;  //pr(WP|Evg) betas (QR decomposition)
-  vector[n_beta_d] theta_d_raw;  //bias betas (QR decomposition)
-  real<lower=0> theta_d_sigma;  //scale for bias betas vs Norm(0,1)
+  vector[n_beta_d] theta_d_z;  //bias betas (QR decomposition)
+  real<lower=0> theta_d_scale;  //scale for bias betas since Y1-Y2 is very small
   //NNGP
   real<lower=0> sigma[L-1];  //sqrt(nugget)
   real<lower=0> phi[L-1];  //decay rate
@@ -128,7 +128,7 @@ transformed parameters {
   real<lower=0> sig2[L-1];
   
   //scaled theta since Y1-Y2 is very small
-  theta_d = theta_d_raw * theta_d_sigma;
+  theta_d = theta_d_z * theta_d_scale;
   
   //NNGP calculations
   for(l in 1:(L-1)) {
@@ -153,23 +153,18 @@ transformed parameters {
   }
 
   //split and de-bias Y2
-  Y2_[,1] = to_array_1d(to_vector(Y2[1:n1,1]) 
-      + (Q_d1[1:n1,] * theta_d[1:d1_2]) 
-      + w[1,1:n1]);
-  Y2_[,2] = to_array_1d(to_vector(Y2[1:n1,2]) 
-      + (Q_d2[1:n1,] * theta_d[d2_1:d2_2])
-      + w[2,1:n1]);
-  Y2_[,3] = to_array_1d(to_vector(Y2[1:n1,3]) 
-      + (Q_d3[1:n1,] * theta_d[d3_1:d3_2])
-      + w[3,1:n1]);
-  Y2_[,4] = to_array_1d((to_vector(Y2[1:n1,4]) 
-          + (Q_d4[1:n1,] * theta_d[d4_1:d4_2])) 
-        .* inv_logit(Q_p[1:n1] * theta_p)
-      + w[4,1:n1]);
-  Y2_[,5] = to_array_1d((to_vector(Y2[1:n1,4]) 
-          + (Q_d4[1:n1,] * theta_d[d4_1:d4_2])) 
-        .* (1 - inv_logit(Q_p[1:n1] * theta_p))
-      + w[5,1:n1]);  
+  Y2_[,1] = to_array_1d(Y2[1:n1,1] + (Q_d1[1:n1,] * theta_d[1:d1_2]) 
+                        + w[1,1:n1]);
+  Y2_[,2] = to_array_1d(Y2[1:n1,2] + (Q_d2[1:n1,] * theta_d[d2_1:d2_2])
+                        + w[2,1:n1]);
+  Y2_[,3] = to_array_1d(Y2[1:n1,3] + (Q_d3[1:n1,] * theta_d[d3_1:d3_2])
+                        + w[3,1:n1]);
+  Y2_[,4] = to_array_1d((Y2[1:n1,4] + (Q_d4[1:n1,] * theta_d[d4_1:d4_2])) 
+                         .* inv_logit(Q_p[1:n1] * theta_p)
+                        + w[4,1:n1]);
+  Y2_[,5] = to_array_1d((Y2[1:n1,4] + (Q_d4[1:n1,] * theta_d[d4_1:d4_2])) 
+                         .* (1 - inv_logit(Q_p[1:n1] * theta_p))
+                        + w[5,1:n1]);  
 }
 
 model {
@@ -187,8 +182,8 @@ model {
   
   //beta priors
   theta_p ~ normal(0, 1);
-  theta_d_raw ~ normal(0, 1);
-  theta_d_sigma ~ normal(0, 1);
+  theta_d_z ~ normal(0, 1);
+  theta_d_scale ~ normal(0, 1);
   
   //likelihood
    Y1 ~ multi_normal_cholesky(Y2_, diag_pre_multiply(L_sigma, L_Omega));
@@ -209,23 +204,18 @@ generated quantities {
   beta_d[d3_1:d3_2] = R_inv_d3 * theta_d[d3_1:d3_2];
   beta_d[d4_1:d4_2] = R_inv_d4 * theta_d[d4_1:d4_2];
 
-  Y2new_[,1] = to_array_1d(to_vector(Y2[n2:n3,1])
-      + (Q_d1[n2:n3,] * theta_d[1:d1_2])
-      + w[1,n2:n3]);
-  Y2new_[,2] = to_array_1d(to_vector(Y2[n2:n3,2])
-      + (Q_d2[n2:n3,] * theta_d[d2_1:d2_2])
-      + w[2,n2:n3]);
-  Y2new_[,3] = to_array_1d(to_vector(Y2[n2:n3,3])
-      + (Q_d3[n2:n3,] * theta_d[d3_1:d3_2])
-      + w[3,n2:n3]);
-  Y2new_[,4] = to_array_1d((to_vector(Y2[n2:n3,4])
-          + (Q_d4[n2:n3,] * theta_d[d4_1:d4_2])) 
-        .* inv_logit(Q_p[n2:n3] * theta_p)
-      + w[4,n2:n3]);
-  Y2new_[,5] = to_array_1d((to_vector(Y2[n2:n3,4])
-          + (Q_d4[n2:n3,] * theta_d[d4_1:d4_2])) 
-        .* (1 - inv_logit(Q_p[n2:n3] * theta_p))
-      + w[5,n2:n3]);
+  Y2new_[,1] = to_array_1d(Y2[n2:n3,1] + (Q_d1[n2:n3,] * theta_d[1:d1_2])
+                           + w[1,n2:n3]);
+  Y2new_[,2] = to_array_1d(Y2[n2:n3,2] + (Q_d2[n2:n3,] * theta_d[d2_1:d2_2])
+                           + w[2,n2:n3]);
+  Y2new_[,3] = to_array_1d(Y2[n2:n3,3] + (Q_d3[n2:n3,] * theta_d[d3_1:d3_2])
+                           + w[3,n2:n3]);
+  Y2new_[,4] = to_array_1d((Y2[n2:n3,4] + (Q_d4[n2:n3,] * theta_d[d4_1:d4_2])) 
+                            .* inv_logit(Q_p[n2:n3] * theta_p)
+                           + w[4,n2:n3]);
+  Y2new_[,5] = to_array_1d((Y2[n2:n3,4] + (Q_d4[n2:n3,] * theta_d[d4_1:d4_2])) 
+                            .* (1 - inv_logit(Q_p[n2:n3] * theta_p))
+                           + w[5,n2:n3]);
 
   for(n in 1:n1) {
     n_eta[n] = tr_gjam_inv(Y2_[n]);

@@ -83,8 +83,8 @@ parameters {
   vector[L-1] nu[n1];
   //thetas: QR decomposition slopes
   vector[nB_p] theta_p;  //pr(WP|Evg) betas (QR decomposition)
-  vector[n_beta_d] theta_d_raw;  //bias betas (QR decomposition)
-  real<lower=0> theta_d_sigma;
+  vector[n_beta_d] theta_d_z;  //bias betas (QR decomposition)
+  real<lower=0> theta_d_scale;
 }
 
 transformed parameters {
@@ -92,7 +92,7 @@ transformed parameters {
   vector[L-1] Y2_[n1];  
   vector[n_beta_d] theta_d;
   
-  theta_d = theta_d_raw * theta_d_sigma;
+  theta_d = theta_d_z * theta_d_scale;
   
   //correct bias & split WP to [,4] and Evg to [,5]
   Y2_[1:n1,1] = to_array_1d(Y2[1:n1,1] + (Q_d1[1:n1,] * theta_d[1:d1_2]));
@@ -118,8 +118,8 @@ model {
   
   //beta priors
   theta_p ~ normal(0, 1);
-  theta_d_raw ~ normal(0, 1);
-  theta_d_sigma ~ normal(0, 1);
+  theta_d_z ~ normal(0, 1);
+  theta_d_scale ~ normal(0, 1);
   
   //likelihood
    Y1 ~ multi_normal_cholesky(nu, diag_pre_multiply(L_sigma[1], L_Omega[1]));
