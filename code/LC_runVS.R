@@ -13,8 +13,8 @@ source("code/LC_fun.R"); source("code/stan_utilities.R"); theme_set(theme_bw())
 
 grdSz <- "01_1a"
 blockSize <- 10  # block = (blockSize x blockSize) grid cells
-maxGridRow <- 40  # number of blocks per row; 1-40
-maxGridCol <- 40  # number of blocks per column; 1-54
+maxGridRow <- 10  # number of blocks per row; 1-40
+maxGridCol <- 10  # number of blocks per column; 1-54
 
 # cell-block reference tibble
 cb.i <- read_csv(paste0("data/roads_", grdSz, ".csv")) %>% 
@@ -71,8 +71,8 @@ nlcd <- read_csv(paste0("data/out_",grdSz,"_nlcd.csv"))  %>%
   select(-BlockID) %>% as.matrix
 
 set.seed(22222)
-nFit <- 960
-nNew <- 640
+nFit <- 75
+nNew <- 25
 n <- sampleCells(nFit, nNew, nrow(grnt), partition=TRUE)
 
 # Y1 & Y2
@@ -94,21 +94,32 @@ colnames(X.all) <- c("el", "rug",
                      "temp", "precip", "seas",
                      "pop", "homes", "rdLen",
                      "pWP")
+X.id <- tibble(var=colnames(X.all),
+              cat=rep(c("topo", "clim", "census", "pWP"), c(2,3,3,1)))
 X.ls <- list(
-  m1=list(c(1,2,5,6), c(2,4,5,7), c(1,3,4,5), c(5,6,7,8), c(1,3,5,9)),
-  m2=list(c(1,2,5,6), c(2,4,5,7), c(1,3,4), c(5,6,7,8), c(1,3,5,9)),
-  m3=list(c(1,2,5,6), c(2,4,5,7), c(1,3), c(5,6,7,8), c(1,3,5,9))
+  tp=rep(list(which(X.id$cat %in% "topo")), 5), 
+  cl=rep(list(which(X.id$cat %in% "clim")), 5), 
+  cn=rep(list(which(X.id$cat %in% "census")), 5), 
+  tp_cl=rep(list(which(X.id$cat %in% c("topo", "clim"))), 5), 
+  tp_cn=rep(list(which(X.id$cat %in% c("topo", "census"))), 5),
+  cl_cn=rep(list(which(X.id$cat %in% c("clim", "census"))), 5),
+  tp_cl_cn=rep(list(which(X.id$cat %in% c("topo", "clim", "census"))), 5)
 )
+for(i in 1:length(X.ls)) {
+  X.ls[[i]][[5]] <- c(9, X.ls[[i]][[5]])
+}
 nX.ls <- map(X.ls, ~map_int(., length))
 
 make_d <- function(X.i, X.all, nFit, n, L, Y1.fit, Y2) {
   # X.i = X.ls[[i]] = covariate column indices for each LC
   # X.all = covariates
   nX <- map_int(X.i, length)
+  d_i <- rep(NA, 8)
+  d_i[c(1,3,5,7)] <- seq(1, nX[1]*3+1, by=nX[1])
+  d_i[c(2,4,6,8)] <- seq(nX[1], nX[1]*4, by=nX[1])
   d <- list(n1=nFit, n2=nFit+1, n3=n$tot, L=6, Y1=Y1.fit, Y2=Y2,
-            nB_d=nX[1:4], nB_p=nX[5],
-            X_d1=X.all[,X.i[[1]]], X_d2=X.all[,X.i[[2]]], X_d3=X.all[,X.i[[3]]],
-            X_d4=X.all[,X.i[[4]]], X_p=X.all[,X.i[[5]]])
+            nB_d=nX[1], nB_p=nX[5], di=d_i,
+            X_d=X.all[,X.i[[1]]], X_p=X.all[,X.i[[5]]])
   return(d)
 }
 
@@ -130,8 +141,8 @@ run_stan <- function(d, mod, nChain=1, iter=2, warmup=1) {
   return(out)
 }
 
-out.ls <- map(d.ls, run_stan, "sc_theta/direct.stan",
-              nChain=2, iter=2000, warmup=1000)
+out.ls <- map(d.ls, run_stan, "sc_theta/latent_vs.stan",
+              nChain=2, iter=1000, warmup=500)
 
 beta.order <- map(X.ls, `[`, 1:4) %>% map(unlist)
 beta.index <- map(nX.ls, ~rep(1:4, times=.[1:4]))
@@ -146,7 +157,9 @@ add_beta_id <- function(x, y) {
 gg.beta.ls <- map2(map(out.ls, ~ggs(., "theta_d_z")), 
                    pmap(list(beta.labels, beta.index, beta.vars), cbind), 
                    add_beta_id)
-map(gg.beta.ls, ~ggplot(., aes(x=value)) + geom_density() + xlim(-5, 5) + 
-      facet_grid(bias~var) + geom_vline(xintercept=0, linetype=3))
-
+gg.beta <- bind_rows(gg.beta.ls, .id="model")
+ggplot(gg.beta, aes(x=value, colour=model)) + geom_density() + 
+      facet_grid(bias~var) + geom_vline(xintercept=0, linetype=3)
+ggplot(gg.beta, aes(x=bias, y=value, colour=model)) + geom_violin() +
+      facet_wrap(~var) + geom_hline(yintercept=0, linetype=3)
 
