@@ -35,7 +35,7 @@ data {
   int n3;  //number of cells for NLCD + covariates
   int L;  //number of land cover classes
   int nB_d;  //number of bias covariates for each LC
-  int di[2*(L-2)];  //bias beta indices
+  int di[2*(L-2)];  //bias beta indexes
   int nB_p;  //number of covariates for pr(WP|Evg)
   //landcover: observed
   vector<lower=0, upper=1>[L-1] Y1[n1];  //GRANIT proportions
@@ -131,6 +131,7 @@ generated quantities {
   Y2new_[,5] = to_array_1d((Y2[n2:n3,4] + (Q_d[n2:n3,] * theta_d[di[7]:di[8]])) 
       .* (1-inv_logit(Q_p[n2:n3,] * theta_p)));
   
+  //enforce compositional constraints
   for(n in 1:n1) {
     n_eta[n] = tr_gjam_inv(nu[n]);
   }
