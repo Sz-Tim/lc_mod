@@ -121,16 +121,16 @@ generated quantities {
   beta_d[di[3]:di[4]] = R_inv_d * theta_d[di[3]:di[4]];
   beta_d[di[5]:di[6]] = R_inv_d * theta_d[di[5]:di[6]];
   beta_d[di[7]:di[8]] = R_inv_d * theta_d[di[7]:di[8]];
-  
+
   //bias correction & WP|Evg splitting
   Y2new_[,1] = to_array_1d(Y2[n2:n3,1] + (Q_d[n2:n3,] * theta_d[di[1]:di[2]]));
   Y2new_[,2] = to_array_1d(Y2[n2:n3,2] + (Q_d[n2:n3,] * theta_d[di[3]:di[4]]));
   Y2new_[,3] = to_array_1d(Y2[n2:n3,3] + (Q_d[n2:n3,] * theta_d[di[5]:di[6]]));
-  Y2new_[,4] = to_array_1d((Y2[n2:n3,4] + (Q_d[n2:n3,] * theta_d[di[7]:di[8]])) 
+  Y2new_[,4] = to_array_1d((Y2[n2:n3,4] + (Q_d[n2:n3,] * theta_d[di[7]:di[8]]))
       .* inv_logit(Q_p[n2:n3,] * theta_p));
-  Y2new_[,5] = to_array_1d((Y2[n2:n3,4] + (Q_d[n2:n3,] * theta_d[di[7]:di[8]])) 
+  Y2new_[,5] = to_array_1d((Y2[n2:n3,4] + (Q_d[n2:n3,] * theta_d[di[7]:di[8]]))
       .* (1-inv_logit(Q_p[n2:n3,] * theta_p)));
-  
+
   //enforce compositional constraints
   for(n in 1:n1) {
     n_eta[n] = tr_gjam_inv(nu[n]);
