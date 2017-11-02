@@ -17,6 +17,7 @@ blockSize <- 5  # block = (blockSize x blockSize) grid cells
 maxGridRow <- 10  # number of blocks per row; 1-40
 maxGridCol <- 10  # number of blocks per column; 1-54
 
+
 # cell-block reference tibble
 cb.i <- read_csv(paste0("data/roads_", grdSz, ".csv")) %>% 
   mutate(CellRow=1:n_distinct(top) %>% rep(n_distinct(left)),
@@ -72,8 +73,8 @@ nlcd <- read_csv(paste0("data/out_",grdSz,"_nlcd.csv"))  %>%
   select(-BlockID) %>% as.matrix
 
 set.seed(22222)
-nFit <- 75
-nNew <- 25
+nFit <- 2563
+nNew <- 854
 n <- sampleCells(nFit, nNew, nrow(grnt), partition=TRUE)
 
 # Y1 & Y2
@@ -140,10 +141,10 @@ d.ls <- map2(X.ls, names(X.ls), make_d, X.all, nFit, n, 6, Y1.fit[,-6], Y2[,-5])
 ## run stan in batch
 ##########
 
-run_stan <- function(d, nChain=1, iter=2, warmup=1) {
-  out <- stan(file="code/sc_theta/latent_vs.stan", 
-              data=d[-which(names(d)=="mod")], 
-              sample_file=paste0("out/mc_out_", d$mod,".csv"),
+
+run_stan <- function(d, mod, nChain=1, iter=2, warmup=1) {
+  out <- stan(file=paste0("code/", mod), 
+              data=d, 
               iter=iter, warmup=warmup, chains=nChain, seed=4337, init=0,
               include=FALSE, pars=c("Y2_", "Y2new_", "nu"), verbose=TRUE)
   return(out)
@@ -154,9 +155,18 @@ run_stan(d.ls[[1]], nChain=1, iter=1000, warmup=500)
 out.ls <- mclapply(d.ls[1:2], FUN=run_stan, nChain=1, iter=1000, warmup=500, 
                    mc.preschedule=FALSE)
 
-beta.order <- map(X.ls, `[`, 1:4) %>% map(unlist)
-beta.index <- map(nX.ls, ~rep(1:4, times=.[1:4]))
-beta.labels <- map(beta.order, ~paste0("theta_d_z[", 1:length(.), "]"))
+map_df(out.ls, ~rowSums(get_elapsed_time(.))) %>% t %>% cbind(rowMeans(.))
+map_dbl(out.ls, ~(sum(get_elapsed_time(.))/summary(., pars="lp__")$summary[9]))
+
+
+beta.order <- map(X.ls, `[`, 1:5) %>% map(unlist)
+beta.index <- map(nX.ls, ~c(rep(1:5, times=.[1:5])))
+beta.labels <- map(beta.order, ~c(paste0("theta_d_z[", 
+                                         1:(which(.==9)-1), 
+                                         "]"),
+                                  paste0("theta_p[", 
+                                         1:(length(.)-which(.==9)+1),
+                                         "]")))
 beta.vars <- map(beta.order, ~colnames(X.all)[.])
 
 add_beta_id <- function(x, y) {
@@ -164,7 +174,9 @@ add_beta_id <- function(x, y) {
   x$bias <- y[match(x$Parameter, y[,1]), 2]
   return(x)
 }
-gg.beta.ls <- map2(map(out.ls, ~ggs(., "theta_d_z")), 
+gg.ls <- map(out.ls, ~(ggs(., "theta") %>% 
+                         filter(Parameter %in% beta.labels$tp_cl_cn)))
+gg.beta.ls <- map2(gg.ls, 
                    pmap(list(beta.labels, beta.index, beta.vars), cbind), 
                    add_beta_id)
 gg.beta <- bind_rows(gg.beta.ls, .id="model")
