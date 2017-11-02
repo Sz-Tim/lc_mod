@@ -7,12 +7,13 @@
 ##########
 
 if(!require("sevcheck")) devtools::install_github("Sz-Tim/sevcheck")
-p_load("tidyverse", "magrittr", "forcats", "rstan", "ggmcmc", "stringr")
+p_load("tidyverse", "magrittr", "forcats", "rstan", "ggmcmc", 
+       "stringr", "parallel")
 rstan_options(auto_write=TRUE); options(mc.cores=parallel::detectCores())
 source("code/LC_fun.R"); source("code/stan_utilities.R"); theme_set(theme_bw())
 
 grdSz <- "01_1a"
-blockSize <- 10  # block = (blockSize x blockSize) grid cells
+blockSize <- 5  # block = (blockSize x blockSize) grid cells
 maxGridRow <- 10  # number of blocks per row; 1-40
 maxGridCol <- 10  # number of blocks per column; 1-54
 
@@ -110,7 +111,7 @@ for(i in 1:length(X.ls)) {
 }
 nX.ls <- map(X.ls, ~map_int(., length))
 
-make_d <- function(X.i, X.all, nFit, n, L, Y1.fit, Y2) {
+make_d <- function(X.i, mod.nm, X.all, nFit, n, L, Y1.fit, Y2) {
   # X.i = X.ls[[i]] = covariate column indices for each LC
   # X.all = covariates
   nX <- map_int(X.i, length)
@@ -119,11 +120,17 @@ make_d <- function(X.i, X.all, nFit, n, L, Y1.fit, Y2) {
   d_i[c(2,4,6,8)] <- seq(nX[1], nX[1]*4, by=nX[1])
   d <- list(n1=nFit, n2=nFit+1, n3=n$tot, L=6, Y1=Y1.fit, Y2=Y2,
             nB_d=nX[1], nB_p=nX[5], di=d_i,
-            X_d=X.all[,X.i[[1]]], X_p=X.all[,X.i[[5]]])
+            X_d=X.all[,X.i[[1]]], X_p=X.all[,X.i[[5]]], 
+            mod=mod.nm)
   return(d)
 }
 
-d.ls <- d.ls <- map(X.ls, make_d, X.all, nFit, n, 6, Y1.fit[,-6], Y2[,-5])
+d.ls <- map2(X.ls, names(X.ls), make_d, X.all, nFit, n, 6, Y1.fit[,-6], Y2[,-5])
+# for(i in 1:7) {
+#   stan_rdump(ls(d.ls[[i]]), 
+#              file=paste0("~/Desktop/lc/data/", names(d.ls)[i],".Rdump"),
+#              envir=list2env(d.ls[[i]]))
+# }
 
 
 
@@ -133,16 +140,19 @@ d.ls <- d.ls <- map(X.ls, make_d, X.all, nFit, n, 6, Y1.fit[,-6], Y2[,-5])
 ## run stan in batch
 ##########
 
-run_stan <- function(d, mod, nChain=1, iter=2, warmup=1) {
-  out <- stan(file=paste0("code/", mod), 
-              data=d, 
+run_stan <- function(d, nChain=1, iter=2, warmup=1) {
+  out <- stan(file="code/sc_theta/latent_vs.stan", 
+              data=d[-which(names(d)=="mod")], 
+              sample_file=paste0("out/mc_out_", d$mod,".csv"),
               iter=iter, warmup=warmup, chains=nChain, seed=4337, init=0,
-              include=FALSE, pars=c("Y2_", "Y2new_", "nu"))
+              include=FALSE, pars=c("Y2_", "Y2new_", "nu"), verbose=TRUE)
   return(out)
 }
 
-out.ls <- map(d.ls, run_stan, "sc_theta/latent_vs.stan",
-              nChain=2, iter=1000, warmup=500)
+run_stan(d.ls[[1]], nChain=1, iter=1000, warmup=500)
+
+out.ls <- mclapply(d.ls[1:2], FUN=run_stan, nChain=1, iter=1000, warmup=500, 
+                   mc.preschedule=FALSE)
 
 beta.order <- map(X.ls, `[`, 1:4) %>% map(unlist)
 beta.index <- map(nX.ls, ~rep(1:4, times=.[1:4]))
