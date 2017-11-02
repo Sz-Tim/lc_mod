@@ -138,11 +138,11 @@ generated quantities {
   pWP_new = inv_logit(Q_p[n2:n3,] * theta_p);
   
   //correct bias and split WP to [,4] and Evg to [,5]
-  Y2new_[n2:n3,1] = to_array_1d(Y2[n2:n3,1] + bias_new[,1]);
-  Y2new_[n2:n3,2] = to_array_1d(Y2[n2:n3,2] + bias_new[,2]);
-  Y2new_[n2:n3,3] = to_array_1d(Y2[n2:n3,3] + bias_new[,3]);
-  Y2new_[n2:n3,4] = to_array_1d((Y2[n2:n3,4] + bias_new[,4]) .* pWP_new);
-  Y2new_[n2:n3,5] = to_array_1d((Y2[n2:n3,4] + bias_new[,4]) .* (1-pWP_new));
+  Y2new_[,1] = to_array_1d(Y2[n2:n3,1] + bias_new[,1]);
+  Y2new_[,2] = to_array_1d(Y2[n2:n3,2] + bias_new[,2]);
+  Y2new_[,3] = to_array_1d(Y2[n2:n3,3] + bias_new[,3]);
+  Y2new_[,4] = to_array_1d((Y2[n2:n3,4] + bias_new[,4]) .* pWP_new);
+  Y2new_[,5] = to_array_1d((Y2[n2:n3,4] + bias_new[,4]) .* (1-pWP_new));
   
   //enforce compositional constraints
   for(n in 1:n1) {
