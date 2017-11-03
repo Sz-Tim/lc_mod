@@ -1,22 +1,18 @@
 # set up environment in LC_runTest.Rmd through data dump
 # mods: vector of stan model names
 mods <- paste0("sc_theta/", 
-               c("direct_NNGP", "direct_NNGP", 
-                 "direct_NNGP_phiSc", "direct_NNGP_phiSc",
-                 "direct_NNGP_wSc", "direct_NNGP_wSc"),
+               c("latent", "latent_rev"),
                ".stan")
-td <- rep(10:11, 3)
-run_stan <- function(mod, td, nChain=1, iter=2, warmup=1) {
+run_stan <- function(mod, nChain=1, iter=2, warmup=1) {
   out <- stan(file=paste0("code/", mod), 
        data=read_rdump("code/all_data.Rdump"), 
        iter=iter, warmup=warmup, chains=nChain, seed=4337, init=0,
-       control=list(max_treedepth=td),
-       include=FALSE, pars=c("Y2_", "Y2new_", "nu","V", "uw_dp", "um"))
+       include=FALSE, pars=c("Y2_", "Y2new_", "nu"))
   return(out)
 }
-out.ls <- map2(mods, td, run_stan, nChain=2, iter=2000, warmup=1000)
+out.ls <- map(mods, run_stan, nChain=2, iter=5000, warmup=1000)
 
-names(out.ls) <- paste(mods, td, sep="_")
+names(out.ls) <- mods
 
 
 
@@ -45,7 +41,7 @@ out.gg <- map(out.ls, ~(ggs(., "n_eta") %>%
                                     q95=quantile(value, 0.95)) %>%
                           ungroup() %>% group_by(BlockID)))
 
-map_df(out.ls, get_elapsed_time) %>% t %>% cbind(rowSums(.))
+map_df(out.ls, ~rowSums(get_elapsed_time(.))) %>% t %>% cbind(rowMeans(.))
 map_dbl(out.ls, ~(sum(get_elapsed_time(.))/summary(., pars="lp__")$summary[9]))
 map(out.ls, check_treedepth)
 map(out.ls, check_div)
