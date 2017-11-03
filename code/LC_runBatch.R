@@ -1,7 +1,7 @@
 # set up environment in LC_runTest.Rmd through data dump
 # mods: vector of stan model names
 mods <- paste0("sc_theta/", 
-               c("latent", "latent_rev"),
+               c("latent_vs", "latent_bp"),
                ".stan")
 run_stan <- function(mod, nChain=1, iter=2, warmup=1) {
   out <- stan(file=paste0("code/", mod), 
