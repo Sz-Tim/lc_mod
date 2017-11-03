@@ -34,45 +34,26 @@ data {
   int n2;  //n1 + 1 (for indexing)
   int n3;  //number of cells for NLCD + covariates
   int L;  //number of land cover classes
-  int nB_d[L-2];  //number of bias covariates for each LC
+  int nB_d;  //number of bias covariates for each LC
+  int di[2*(L-2)];  //bias beta indexes
   int nB_p;  //number of covariates for pr(WP|Evg)
   //landcover: observed
   vector<lower=0, upper=1>[L-1] Y1[n1];  //GRANIT proportions
   matrix<lower=0, upper=1>[n3,L-2] Y2;  //NLCD proportions
   //covariates
   matrix[n3,nB_p] X_p;  //pr(WP|Evg) covariates
-  matrix[n3,nB_d[1]] X_d1;  //bias covariates: Dev
-  matrix[n3,nB_d[2]] X_d2;  //bias covariates: Oth
-  matrix[n3,nB_d[3]] X_d3;  //bias covariates: Hwd
-  matrix[n3,nB_d[4]] X_d4;  //bias covariates: Evg
+  matrix[n3,nB_d] X_d;  //bias covariates: Dev
 }
 
 transformed data {
-  int n_beta_d = sum(nB_d);  //total number of beta_ds
-  // indexes for bias betas
-  int d1_2 = nB_d[1];         //last d1 beta
-  int d2_1 = d1_2 + 1;        //first d2 beta
-  int d2_2 = d1_2 + nB_d[2];  //last d2 beta
-  int d3_1 = d2_2 + 1;        //first d3 beta
-  int d3_2 = d2_2 + nB_d[3];  //last d3 beta
-  int d4_1 = d3_2 + 1;        //first d4 beta
-  int d4_2 = d3_2 + nB_d[4];  //last d4 beta
+  int n_beta_d = nB_d*(L-2);  //total number of beta_ds
   //QR decomposition for covariates
   matrix[n3,nB_p] Q_p = qr_Q(X_p)[,1:nB_p] * sqrt(n3-1);
   matrix[nB_p,nB_p] R_p = qr_R(X_p)[1:nB_p,] / sqrt(n3-1);
   matrix[nB_p,nB_p] R_inv_p = inverse(R_p);
-  matrix[n3,nB_d[1]] Q_d1 = qr_Q(X_d1)[,1:nB_d[1]] * sqrt(n3-1);
-  matrix[nB_d[1],nB_d[1]] R_d1 = qr_R(X_d1)[1:nB_d[1],] / sqrt(n3-1);
-  matrix[nB_d[1],nB_d[1]] R_inv_d1 = inverse(R_d1);
-  matrix[n3,nB_d[2]] Q_d2 = qr_Q(X_d2)[,1:nB_d[2]] * sqrt(n3-1);
-  matrix[nB_d[2],nB_d[2]] R_d2 = qr_R(X_d2)[1:nB_d[2],] / sqrt(n3-1);
-  matrix[nB_d[2],nB_d[2]] R_inv_d2 = inverse(R_d2);
-  matrix[n3,nB_d[3]] Q_d3 = qr_Q(X_d3)[,1:nB_d[3]] * sqrt(n3-1);
-  matrix[nB_d[3],nB_d[3]] R_d3 = qr_R(X_d3)[1:nB_d[3],] / sqrt(n3-1);
-  matrix[nB_d[3],nB_d[3]] R_inv_d3 = inverse(R_d3);
-  matrix[n3,nB_d[4]] Q_d4 = qr_Q(X_d4)[,1:nB_d[4]] * sqrt(n3-1);
-  matrix[nB_d[4],nB_d[4]] R_d4 = qr_R(X_d4)[1:nB_d[4],] / sqrt(n3-1);
-  matrix[nB_d[4],nB_d[4]] R_inv_d4 = inverse(R_d4);
+  matrix[n3,nB_d] Q_d = qr_Q(X_d)[,1:nB_d] * sqrt(n3-1);
+  matrix[nB_d,nB_d] R_d = qr_R(X_d)[1:nB_d,] / sqrt(n3-1);
+  matrix[nB_d,nB_d] R_inv_d = inverse(R_d);
 }
 
 parameters {
@@ -95,12 +76,12 @@ transformed parameters {
   theta_d = theta_d_z * theta_d_scale;
   
   //correct bias & split WP to [,4] and Evg to [,5]
-  Y2_[1:n1,1] = to_array_1d(Y2[1:n1,1] + (Q_d1[1:n1,] * theta_d[1:d1_2]));
-  Y2_[1:n1,2] = to_array_1d(Y2[1:n1,2] + (Q_d2[1:n1,] * theta_d[d2_1:d2_2]));
-  Y2_[1:n1,3] = to_array_1d(Y2[1:n1,3] + (Q_d3[1:n1,] * theta_d[d3_1:d3_2]));
-  Y2_[1:n1,4] = to_array_1d((Y2[1:n1,4] + (Q_d4[1:n1,] * theta_d[d4_1:d4_2])) 
+  Y2_[1:n1,1] = to_array_1d(Y2[1:n1,1] + (Q_d[1:n1,] * theta_d[di[1]:di[2]]));
+  Y2_[1:n1,2] = to_array_1d(Y2[1:n1,2] + (Q_d[1:n1,] * theta_d[di[3]:di[4]]));
+  Y2_[1:n1,3] = to_array_1d(Y2[1:n1,3] + (Q_d[1:n1,] * theta_d[di[5]:di[6]]));
+  Y2_[1:n1,4] = to_array_1d((Y2[1:n1,4] + (Q_d[1:n1,] * theta_d[di[7]:di[8]])) 
       .* inv_logit(Q_p[1:n1,] * theta_p));
-  Y2_[1:n1,5] = to_array_1d((Y2[1:n1,4] + (Q_d4[1:n1,] * theta_d[d4_1:d4_2])) 
+  Y2_[1:n1,5] = to_array_1d((Y2[1:n1,4] + (Q_d[1:n1,] * theta_d[di[7]:di[8]])) 
       .* (1-inv_logit(Q_p[1:n1,] * theta_p)));
 }
 
@@ -136,19 +117,21 @@ generated quantities {
 
   //QR decopmositions
   beta_p = R_inv_p * theta_p;
-  beta_d[1:d1_2] = R_inv_d1 * theta_d[1:d1_2];
-  beta_d[d2_1:d2_2] = R_inv_d2 * theta_d[d2_1:d2_2];
-  beta_d[d3_1:d3_2] = R_inv_d3 * theta_d[d3_1:d3_2];
-  beta_d[d4_1:d4_2] = R_inv_d4 * theta_d[d4_1:d4_2];
-  
-  Y2new_[,1] = to_array_1d(Y2[n2:n3,1] + (Q_d1[n2:n3,] * theta_d[1:d1_2]));
-  Y2new_[,2] = to_array_1d(Y2[n2:n3,2] + (Q_d2[n2:n3,] * theta_d[d2_1:d2_2]));
-  Y2new_[,3] = to_array_1d(Y2[n2:n3,3] + (Q_d3[n2:n3,] * theta_d[d3_1:d3_2]));
-  Y2new_[,4] = to_array_1d((Y2[n2:n3,4] + (Q_d4[n2:n3,] * theta_d[d4_1:d4_2])) 
+  beta_d[di[1]:di[2]] = R_inv_d * theta_d[di[1]:di[2]];
+  beta_d[di[3]:di[4]] = R_inv_d * theta_d[di[3]:di[4]];
+  beta_d[di[5]:di[6]] = R_inv_d * theta_d[di[5]:di[6]];
+  beta_d[di[7]:di[8]] = R_inv_d * theta_d[di[7]:di[8]];
+
+  //bias correction & WP|Evg splitting
+  Y2new_[,1] = to_array_1d(Y2[n2:n3,1] + (Q_d[n2:n3,] * theta_d[di[1]:di[2]]));
+  Y2new_[,2] = to_array_1d(Y2[n2:n3,2] + (Q_d[n2:n3,] * theta_d[di[3]:di[4]]));
+  Y2new_[,3] = to_array_1d(Y2[n2:n3,3] + (Q_d[n2:n3,] * theta_d[di[5]:di[6]]));
+  Y2new_[,4] = to_array_1d((Y2[n2:n3,4] + (Q_d[n2:n3,] * theta_d[di[7]:di[8]]))
       .* inv_logit(Q_p[n2:n3,] * theta_p));
-  Y2new_[,5] = to_array_1d((Y2[n2:n3,4] + (X_d4[n2:n3,] * theta_d[d4_1:d4_2])) 
+  Y2new_[,5] = to_array_1d((Y2[n2:n3,4] + (Q_d[n2:n3,] * theta_d[di[7]:di[8]]))
       .* (1-inv_logit(Q_p[n2:n3,] * theta_p)));
-  
+
+  //enforce compositional constraints
   for(n in 1:n1) {
     n_eta[n] = tr_gjam_inv(nu[n]);
   }
