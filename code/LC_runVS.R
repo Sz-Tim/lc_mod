@@ -14,8 +14,8 @@ source("code/LC_fun.R"); source("code/stan_utilities.R"); theme_set(theme_bw())
 
 grdSz <- "01_1a"
 blockSize <- 5  # block = (blockSize x blockSize) grid cells
-maxGridRow <- 10  # number of blocks per row; 1-40
-maxGridCol <- 10  # number of blocks per column; 1-54
+maxGridRow <- 40  # number of blocks per row; 1-40
+maxGridCol <- 54  # number of blocks per column; 1-54
 
 
 # cell-block reference tibble
@@ -73,8 +73,8 @@ nlcd <- read_csv(paste0("data/out_",grdSz,"_nlcd.csv"))  %>%
   select(-BlockID) %>% as.matrix
 
 set.seed(22222)
-nFit <- 2563
-nNew <- 854
+nFit <- 1620
+nNew <- 540
 n <- sampleCells(nFit, nNew, nrow(grnt), partition=TRUE)
 
 # Y1 & Y2
@@ -142,15 +142,19 @@ d.ls <- map2(X.ls, names(X.ls), make_d, X.all, nFit, n, 6, Y1.fit[,-6], Y2[,-5])
 ##########
 
 
-run_stan <- function(d, mod, nChain=1, iter=2, warmup=1) {
+run_stan <- function(mod, d, nChain=1, iter=2, warmup=1) {
   out <- stan(file=paste0("code/", mod), 
               data=d, 
               iter=iter, warmup=warmup, chains=nChain, seed=4337, init=0,
-              include=FALSE, pars=c("Y2_", "Y2new_", "nu"), verbose=TRUE)
+              include=FALSE, pars=c("Y2_", "Y2new_", "nu", 
+                                    "bias", "bias_new", "pWP", "pWP_new"))
   return(out)
 }
 
-run_stan(d.ls[[1]], nChain=1, iter=1000, warmup=500)
+mod.ls <- paste0("sc_theta/latent_", c("bp.stan", "vs.stan"))
+
+out.ls <- map(mod.ls, run_stan, d.ls[[2]], 
+         nChain=4, iter=2000, warmup=1000)
 
 out.ls <- mclapply(d.ls[1:2], FUN=run_stan, nChain=1, iter=1000, warmup=500, 
                    mc.preschedule=FALSE)
