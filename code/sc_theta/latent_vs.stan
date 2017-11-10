@@ -114,6 +114,8 @@ generated quantities {
   //betas
   vector[nB_p] beta_p;  //pr(WP|Evg) betas
   vector[n_beta_d] beta_d;  //bias betas
+  //log likelihood for model comparison
+  vector[2*n1] loglik;
 
   //QR decopmositions
   beta_p = R_inv_p * theta_p;
@@ -130,10 +132,14 @@ generated quantities {
       .* inv_logit(Q_p[n2:n3,] * theta_p));
   Y2new_[,5] = to_array_1d((Y2[n2:n3,4] + (Q_d[n2:n3,] * theta_d[di[7]:di[8]]))
       .* (1-inv_logit(Q_p[n2:n3,] * theta_p)));
-
+  
   //enforce compositional constraints
   for(n in 1:n1) {
     n_eta[n] = tr_gjam_inv(nu[n]);
+    loglik[n] = multi_normal_cholesky_lpdf(Y1[n] | nu[n], 
+                                    diag_pre_multiply(L_sigma[1], L_Omega[1]));
+    loglik[n1+n] = multi_normal_cholesky_lpdf(Y2_[n] | nu[n], 
+                                    diag_pre_multiply(L_sigma[2], L_Omega[2]));
   }
   for(n in n2:n3) {
     n_eta[n] = tr_gjam_inv(Y2new_[n-n1]);
