@@ -72,23 +72,23 @@ transformed parameters {
   //NLCD de-biasing and splitting
   vector[L-1] Y2_[n1];  
   vector[n_beta_d] theta_d;
-  matrix[n1,L-2] bias;
-  vector[n1] pWP;
   
   theta_d = theta_d_z * theta_d_scale;
   
-  //calculate bias and pWP
-  for(i in 1:4) {
-    bias[,i] = Q_d[1:n1,] * theta_d[di[i+i-1]:di[i+i]];
-  }
-  pWP = inv_logit(Q_p[1:n1,] * theta_p);
-  
   //correct bias and split WP to [,4] and Evg to [,5]
-  Y2_[1:n1,1] = to_array_1d(Y2[1:n1,1] + bias[,1]);
-  Y2_[1:n1,2] = to_array_1d(Y2[1:n1,2] + bias[,2]);
-  Y2_[1:n1,3] = to_array_1d(Y2[1:n1,3] + bias[,3]);
-  Y2_[1:n1,4] = to_array_1d((Y2[1:n1,4] + bias[,4]) .* pWP);
-  Y2_[1:n1,5] = to_array_1d((Y2[1:n1,4] + bias[,4]) .* (1-pWP));
+  {
+    //temporary storage for pWP & bias term
+    vector[n1] pWP = inv_logit(Q_p[1:n1,] * theta_p);
+    matrix[n1,L-2] bias;
+    for(i in 1:4) {
+      bias[,i] = Q_d[1:n1,] * theta_d[di[i+i-1]:di[i+i]];
+    }
+    Y2_[1:n1,1] = to_array_1d(Y2[1:n1,1] + bias[,1]);
+    Y2_[1:n1,2] = to_array_1d(Y2[1:n1,2] + bias[,2]);
+    Y2_[1:n1,3] = to_array_1d(Y2[1:n1,3] + bias[,3]);
+    Y2_[1:n1,4] = to_array_1d((Y2[1:n1,4] + bias[,4]) .* pWP);
+    Y2_[1:n1,5] = to_array_1d((Y2[1:n1,4] + bias[,4]) .* (1-pWP));
+  }
 }
 
 model {
