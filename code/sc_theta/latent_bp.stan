@@ -120,9 +120,8 @@ generated quantities {
   //betas
   vector[nB_p] beta_p;  //pr(WP|Evg) betas
   vector[n_beta_d] beta_d;  //bias betas
-  //bias & pWP
-  matrix[n3-n1,L-2] bias_new;
-  vector[n3-n1] pWP_new;
+  //log likelihood for model comparison
+  vector[2*n1] loglik;
 
   //QR decopmositions
   beta_p = R_inv_p * theta_p;
@@ -132,21 +131,29 @@ generated quantities {
   beta_d[di[7]:di[8]] = R_inv_d * theta_d[di[7]:di[8]];
   
   //calculate bias and pWP
-  for(i in 1:4) {
-    bias_new[,i] = Q_d[n2:n3,] * theta_d[di[i+i-1]:di[i+i]];
+  {
+    matrix[n3-n1,L-2] bias_new;
+    vector[n3-n1] pWP_new;
+    for(i in 1:4) {
+      bias_new[,i] = Q_d[n2:n3,] * theta_d[di[i+i-1]:di[i+i]];
+    }
+    pWP_new = inv_logit(Q_p[n2:n3,] * theta_p);
+    
+    //correct bias and split WP to [,4] and Evg to [,5]
+    Y2new_[,1] = to_array_1d(Y2[n2:n3,1] + bias_new[,1]);
+    Y2new_[,2] = to_array_1d(Y2[n2:n3,2] + bias_new[,2]);
+    Y2new_[,3] = to_array_1d(Y2[n2:n3,3] + bias_new[,3]);
+    Y2new_[,4] = to_array_1d((Y2[n2:n3,4] + bias_new[,4]) .* pWP_new);
+    Y2new_[,5] = to_array_1d((Y2[n2:n3,4] + bias_new[,4]) .* (1-pWP_new));
   }
-  pWP_new = inv_logit(Q_p[n2:n3,] * theta_p);
-  
-  //correct bias and split WP to [,4] and Evg to [,5]
-  Y2new_[,1] = to_array_1d(Y2[n2:n3,1] + bias_new[,1]);
-  Y2new_[,2] = to_array_1d(Y2[n2:n3,2] + bias_new[,2]);
-  Y2new_[,3] = to_array_1d(Y2[n2:n3,3] + bias_new[,3]);
-  Y2new_[,4] = to_array_1d((Y2[n2:n3,4] + bias_new[,4]) .* pWP_new);
-  Y2new_[,5] = to_array_1d((Y2[n2:n3,4] + bias_new[,4]) .* (1-pWP_new));
   
   //enforce compositional constraints
   for(n in 1:n1) {
     n_eta[n] = tr_gjam_inv(nu[n]);
+    loglik[n] = multi_normal_cholesky_lpdf(Y1[n] | nu[n], 
+                                    diag_pre_multiply(L_sigma[1], L_Omega[1]));
+    loglik[n1+n] = multi_normal_cholesky_lpdf(Y2_[n] | nu[n], 
+                                    diag_pre_multiply(L_sigma[2], L_Omega[2]));
   }
   for(n in n2:n3) {
     n_eta[n] = tr_gjam_inv(Y2new_[n-n1]);
