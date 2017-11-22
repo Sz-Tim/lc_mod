@@ -15,8 +15,8 @@ source("code/LC_fun.R"); source("code/stan_utilities.R"); theme_set(theme_bw())
 ```{r readData, message=FALSE}
 grdSz <- "01_1a"
 blockSize <- 10  # block = (blockSize x blockSize) grid cells
-maxGridRow <- 20  # number of blocks per row; 1-40
-maxGridCol <- 20  # number of blocks per column; 1-54
+maxGridRow <- 300  # number of blocks per row; 1-40
+maxGridCol <- 300  # number of blocks per column; 1-54
 
 # cell-block reference tibble
 cb.i <- read_csv(paste0("data/roads_", grdSz, ".csv")) %>% 
@@ -77,8 +77,8 @@ nlcd <- read_csv(paste0("data/out_",grdSz,"_nlcd.csv"))  %>%
 ```{r modelSetup}
 # small scale runs: set nCell for Y1&Y2 and Y2
 set.seed(22222)
-nFit <- 300
-nNew <- 100
+nFit <- floor(nrow(grnt)*.75)
+nNew <- floor(nrow(grnt)*.25)
 n <- sampleCells(nFit, nNew, nrow(grnt), partition=TRUE)
 
 # Y1 & Y2
@@ -125,10 +125,16 @@ Yd <- tibble(d1=c(scale(grnt[,1]-nlcd[,1])),
              el=c(scale(topo$el)),
              rugg=c(scale(topo$rugg)))
 cor(Yd)
+jpeg(paste0("out/X_cor_", blockSize, ".jpg"), 
+     width=5, height=5, units="in", res=500)
+pairs(Yd[,7:15], upper.panel=panel.cor, 
+      main=paste("block size:", blockSize^2, "acres"),
+      lower.panel=function(...) smoothScatter(..., nrpoints = 0, add = TRUE))
+dev.off()
 # block distances & adjacency
-b.rows <- cb.i$BlockRow[match(rdLen$BlockID[n$all], cb.i$BlockID)]
-b.cols <- cb.i$BlockCol[match(rdLen$BlockID[n$all], cb.i$BlockID)]
-coords <- data.frame(b.cols, b.rows)
+# b.rows <- cb.i$BlockRow[match(rdLen$BlockID[n$all], cb.i$BlockID)]
+# b.cols <- cb.i$BlockCol[match(rdLen$BlockID[n$all], cb.i$BlockID)]
+# coords <- data.frame(b.cols, b.rows)
 ```
 
 
@@ -163,9 +169,9 @@ nn_YX <- id_d_M$nn_YX
 ```{r modelRun}
 d <- list(n1=nFit, n2=nFit+1, n3=n$tot, L=6, nB_d=nBd, nB_p=nBp,
           Y1=Y1.fit[,-6], Y2=Y2[,-5], 
-          m=m, D_star=D_star, D_site_star=D_site_star,
-          M=(1+2*M_r)^2-1, nn_id=nn_id, nn_d=nn_d, nn_dM=nn_dM, nn_YX=nn_YX,
-          nn_dim=nn_dim, dim_r=nrow(id_d_M$n_M_ref), dim_i=id_d_M$n_M_ref,
+          # m=m, D_star=D_star, D_site_star=D_site_star,
+          # M=(1+2*M_r)^2-1, nn_id=nn_id, nn_d=nn_d, nn_dM=nn_dM, nn_YX=nn_YX,
+          # nn_dim=nn_dim, dim_r=nrow(id_d_M$n_M_ref), dim_i=id_d_M$n_M_ref,
           X_d1=Xd[[1]], X_d2=Xd[[2]], X_d3=Xd[[3]], X_d4=Xd[[4]], X_p=Xp)
 stan_rdump(ls(d), file="code/all_data.Rdump", envir=list2env(d))
 out <- stan(file="code/sc_theta/latent.stan", init=0, thin=20,

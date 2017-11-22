@@ -16,7 +16,7 @@ functions {
     w_p = sum(w_p_);
     
     if(w_p >= 0.99) {
-      D_i = (w_p^(-1)) * (1 - (0.01)^(w_p/0.99));
+      D_i = (1 - (0.01)^(w_p/0.99)) / w_p;
       while(sum(eta[1:5]) > 0.99) {
         vector[5] tmp;
         tmp = D_i * eta[1:5];
@@ -47,8 +47,9 @@ data {
 transformed data {
   int n_beta_d = nB_d*(L-2);  //total number of beta_ds
   //QR decomposition for covariates
-  matrix[n3,nB_p] Q = qr_Q(X)[,1:nB_p] * sqrt(n3-1);
-  matrix[nB_p,nB_p] R = qr_R(X)[1:nB_p,] / sqrt(n3-1);
+  real qr_n = n3-1;  //avoids cmdstan ambiguity with sqrt
+  matrix[n3,nB_p] Q = qr_Q(X)[,1:nB_p] * sqrt(qr_n);
+  matrix[nB_p,nB_p] R = qr_R(X)[1:nB_p,] / sqrt(qr_n);
   matrix[nB_p,nB_p] R_inv = inverse(R);
 }
 
@@ -68,6 +69,11 @@ transformed parameters {
   //NLCD de-biasing and splitting
   vector[L-1] Y2_[n1];  
   vector[n_beta_d] theta_d;
+  matrix[L-1,L-1] L_Sigma[2];
+  
+  for(j in 1:2) {
+    L_Sigma[j] = diag_pre_multiply(L_sigma[j], L_Omega[j]);
+  }
   
   theta_d = theta_d_z * theta_d_scale;
   
@@ -105,8 +111,8 @@ model {
   theta_d_scale ~ normal(0, 1);
   
   //likelihood
-   Y1 ~ multi_normal_cholesky(nu, diag_pre_multiply(L_sigma[1], L_Omega[1]));
-   Y2_ ~ multi_normal_cholesky(nu, diag_pre_multiply(L_sigma[2], L_Omega[2]));
+   Y1 ~ multi_normal_cholesky(nu, L_Sigma[1]);
+   Y2_ ~ multi_normal_cholesky(nu, L_Sigma[2]);
 }
 
 generated quantities {
@@ -127,8 +133,8 @@ generated quantities {
   
   //calculate bias and pWP
   {
-	vector[L-1] Y2new_[n3-n1];  //unbiased, split NLCD
-	matrix[n3-n1,L-2] bias_new;
+	  vector[L-1] Y2new_[n3-n1];  //unbiased, split NLCD
+	  matrix[n3-n1,L-2] bias_new;
     vector[n3-n1] pWP_new;
     for(i in 1:4) {
       bias_new[,i] = Q[n2:n3,2:nB_p] * theta_d[di[i+i-1]:di[i+i]];
@@ -142,16 +148,14 @@ generated quantities {
     Y2new_[,4] = to_array_1d((Y2[n2:n3,4] + bias_new[,4]) .* pWP_new);
     Y2new_[,5] = to_array_1d((Y2[n2:n3,4] + bias_new[,4]) .* (1-pWP_new));
   
-	//enforce compositional constraints
-	for(n in 1:n1) {
-		n_eta[n] = tr_gjam_inv(nu[n]);
-		log_lik[n] = multi_normal_cholesky_lpdf(Y1[n] | nu[n], 
-                                    diag_pre_multiply(L_sigma[1], L_Omega[1]));
-		log_lik[n1+n] = multi_normal_cholesky_lpdf(Y2_[n] | nu[n], 
-                                    diag_pre_multiply(L_sigma[2], L_Omega[2]));
-	}
-	for(n in n2:n3) {
-		n_eta[n] = tr_gjam_inv(Y2new_[n-n1]);
-	}
+	  //enforce compositional constraints
+	  for(n in 1:n1) {
+	  	n_eta[n] = tr_gjam_inv(nu[n]);
+	  	log_lik[n] = multi_normal_cholesky_lpdf(Y1[n] | nu[n], L_Sigma[1]);
+	  	log_lik[n1+n] = multi_normal_cholesky_lpdf(Y2_[n] | nu[n], L_Sigma[2]);
+	  }
+	  for(n in n2:n3) {
+	  	n_eta[n] = tr_gjam_inv(Y2new_[n-n1]);
+	  }
   }
 }

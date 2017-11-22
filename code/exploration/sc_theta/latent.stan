@@ -16,7 +16,7 @@ functions {
     w_p = sum(w_p_);
     
     if(w_p >= 0.99) {
-      D_i = (w_p^(-1)) * (1 - (0.01)^(w_p/0.99));
+      D_i = (1 - (0.01)^(w_p/0.99)) / w_p;
       while(sum(eta[1:5]) > 0.99) {
         vector[5] tmp;
         tmp = D_i * eta[1:5];
