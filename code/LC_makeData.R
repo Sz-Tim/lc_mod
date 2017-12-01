@@ -1,14 +1,20 @@
+# This script creates the datasets to be used by the land cover model. It uses
+# the output from GIS (a row for each cell with left, top, CellID, pWP, climate,
+# GRANIT, NLCD, topo, census, & Set=(fit vs predict)) and creates datasets in 
+# the correct format for the stan model.
 
 library(tidyverse)
 load("data/lc_base.Rdata")
 
 
-# For making different sized datasets
+# For making different sized datasets -- determining feasibility of different
+# variable selection grid sizes
+
 data_full <- data_df
 nFit <- sum(!data_full$Set)
 
 # For different sizes
-sizes <- c("50k"=50000, "75k"=75000, "100k"=100000, "125k"=125000)
+sizes <- c("50k"=50000, "75k"=75000, "100k"=100000)
 id <- purrr::map(sizes, ~sample(1:nFit, ., replace=FALSE))
 
 for(s in 1:length(sizes)) {
