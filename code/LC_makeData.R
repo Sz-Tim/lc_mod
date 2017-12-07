@@ -5,7 +5,7 @@
 
 library(tidyverse)
 load("data/lc_base.Rdata")
-strat.id <- read_csv("data/stratified_sample_15pct_rowID.csv")
+strat.id <- read_csv("data/stratified_sample_15pct_20a_rowID.csv")
 
 # For extracting a stratified random sample within NH (LC_stratifyVS.R)
 NH_df <- data_df %>% filter(!Set) %>%
