@@ -5,7 +5,7 @@
 # only possible for cells with both GRANIT & NLCD, it is restricted to cells 
 # with data_df$Set == FALSE.
 
-library(tidyverse); library(purrr)
+library(tidyverse); library(purrr); library(stringr)
 load("data/lc_base.Rdata")
 
 # extract covariates
