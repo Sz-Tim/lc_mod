@@ -42,7 +42,7 @@ X.q.samp <- X.q[samp.id,]
 names(X.q.samp) <- paste0(names(X.q.samp), "_q")
 X_df <- cbind(NH_df[samp.id,], X.q.samp)
 
-write_csv(data.frame(id=samp.id), "data/stratified_sample_rowID.csv")
+write_csv(data.frame(id=samp.id), "data/stratified_sample_15pct_20a_rowID.csv")
 
 theme_set(theme_bw())
 ggplot(X_df, aes(x=x, y=y, colour=factor(pWP_mean_q))) + 
