@@ -174,7 +174,7 @@ d <- list(n1=nFit, n2=nFit+1, n3=n$tot, L=6, nB_d=nBd, nB_p=nBp,
           # nn_dim=nn_dim, dim_r=nrow(id_d_M$n_M_ref), dim_i=id_d_M$n_M_ref,
           X_d1=Xd[[1]], X_d2=Xd[[2]], X_d3=Xd[[3]], X_d4=Xd[[4]], X_p=Xp)
 stan_rdump(ls(d), file="code/all_data.Rdump", envir=list2env(d))
-out <- stan(file="code/sc_theta/latent.stan", init=0, thin=20,
+out <- stan(file="code/exploration/sc_theta/latent.stan", init=0, thin=20,
             data=read_rdump("code/all_data.Rdump"), 
             iter=6000, warmup=3000, chains=3, seed=43337, refresh=100,
             sample_file="out/PI_latent.csv",
@@ -223,6 +223,7 @@ gg.med <- gg.nu %>%
             q05=quantile(value, 0.05), q25=quantile(value, 0.25),
             q75=quantile(value, 0.75), q95=quantile(value, 0.95)) %>%
   ungroup() %>% group_by(BlockID)
+gg.med$LC <- factor(gg.med$LC, labels=c("Opn", "Oth", "Dec", "WP", "Evg", "Mxd"))
 gg.med.w <- gg.w %>% 
   group_by(CellID, BlockID, BlockRow, BlockCol, LC, Set, Parameter) %>%
   summarise(Y2=first(Y2), med=median(value), 
@@ -245,6 +246,12 @@ gg.EvgMed <- gg.EvgComb %>% group_by(CellID, BlockID, LC, Set) %>%
 ## plots
 ##########
 
+LC.cols <- c("Opn"="#B51700", "Oth"="#5E5E5E", "Dec"="#19651A",
+             "WP"="#B5447F", "Evg"="#0E390F", "Mxd"="#5F8B25")
+LC.labs <- c("Opn"="Open Invasible", "Oth"="Other", "Dec"="Deciduous",
+             "WP"="White Pine", "Evg"="Evergreen", "Mxd"="Mixed",
+             "Y1+Y2"="Y1 & Y2", "Y2"="Y2 only")
+
 ggplot(gg.EvgMed, aes(x=Y1, y=med)) + xlim(0,1) + ylim(0,1) + 
   geom_point(alpha=0.5) + facet_grid(Set~LC) + 
   geom_abline(slope=1, linetype=2, colour="red")
@@ -256,10 +263,14 @@ ggplot(gg.EvgMed, aes(x=Y2, y=med)) + xlim(0,1) + ylim(0,1) +
   geom_point(alpha=0.5) + facet_grid(Set~LC) + 
   geom_abline(slope=1, linetype=2, colour="red")
 
-sc.p <- ggplot(gg.med, aes(x=Y1, y=med, ymin=q25, ymax=q75)) + 
+sc.p <- ggplot(gg.med, aes(x=Y1, y=med, ymin=q05, ymax=q95, colour=LC)) + 
   xlim(0,1) + ylim(0,1) + 
-  geom_pointrange(alpha=0.5, colour="dodgerblue", fatten=1.5) + 
-  geom_abline(slope=1, linetype=3) + facet_grid(Set~LC) 
+  scale_colour_manual("Land cover", values=LC.cols) +
+  geom_pointrange(alpha=0.2, fatten=1.5) + 
+  geom_abline(slope=1, linetype=3) + 
+  facet_grid(Set~LC, labeller=as_labeller(LC.labs)) +
+  labs(title="Posterior distributions for a 216,000 acre test grid",
+       x="Y1", y="Posterior (median, 90% HDPI)")
 ggsave("out/LC_latent.jpg", sc.p, height=10, width=25)
 c.p <- ggplot(gg.EvgMed, aes(x=Y1, xend=Y1, y=Y2, yend=med,
                       colour=abs(Y2-Y1)<abs(med-Y1))) + 
