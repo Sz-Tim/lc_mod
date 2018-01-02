@@ -99,7 +99,7 @@ LC.cols <- c("Opn"="#B51700", "Oth"="#5E5E5E", "Dec"="#19651A",
 LC.labs <- c("Opn"="Open Invasible", "Oth"="Other", "Dec"="Deciduous",
              "WP"="White Pine", "Evg"="Evergreen", "Mxd"="Mixed",
              "Y1+Y2"="Y1 & Y2", "Y2"="Y2 only")
-mod.cols <- c("Posterior median"="#762a83", "Y1"="#5aae61", "Y2"="#1b7837")
+mod.cols <- c("Posterior median"="#b2182b", "Y1"="#4393c3", "Y2"="#053061")
 
 
 med.p <- ggplot(gg.med, aes(x=nu, y=med, ymin=q25, ymax=q75, colour=LC)) + 
@@ -169,13 +169,13 @@ ggplot(med.box, aes(x=val-nu, colour=Predictor, fill=Predictor)) +
   scale_colour_manual(values=mod.cols) + scale_fill_manual(values=mod.cols)
 dens.p <- ggplot(med.box, aes(x=val-nu, colour=Predictor, fill=Predictor)) + 
   geom_vline(xintercept=0, linetype=3, colour="gray30") +
-  geom_density(alpha=0.3, size=1) + 
+  geom_density(alpha=0.15, size=1) + 
   scale_x_continuous("", breaks=c(-1, 0, 1), limits=c(-1,1),
                      labels=c("-1", "0", "1")) + ylab("") +
   facet_grid(Set~LC, scales="free_y", labeller=as_labeller(LC.labs)) + 
   scale_colour_manual(values=mod.cols) + scale_fill_manual(values=mod.cols) +
-  theme(legend.position=c(0.92, 0.34),
-        axis.text=element_text(size=16),
+  theme(legend.position=c("none"),#(0.92, 0.34),
+        axis.text=element_text(size=18),
         axis.title=element_text(size=20),
         strip.text = element_text(size=20),
         legend.text=element_text(size=15),
