@@ -7,27 +7,43 @@
 # - Calculate HPDIs, mean, median, sd for each parameter
 # - Store summarized output as a csv for each model
 
-Packages <- c("rstan", "coda", "bayesplot", "tidyverse", "loo", "doSNOW")
+Packages <- c("rstan", "coda", "bayesplot", "tidyverse", 
+              "loo", "doSNOW", "sevcheck")
 suppressMessages(invisible(lapply(Packages, library, character.only=TRUE)))
+tr_gjam_inv <- function(w, a=0.99) {
+  eta <- w[-length(w)]
+  eta[eta<0] <- 0
+  w.p <- sum( (eta > 0 & eta < 1)*eta + (eta > 1) )
+  
+  if(w.p >= a) {
+    while(sum(eta) > 1) {
+      D.i <- (w.p^(-1)) * (1 - ((1-a)^(w.p/a)))
+      eta <- D.i*eta
+    }
+  }
+  c(eta, 1-sum(eta)) 
+}
 
 n.cores <- 2
 n.thin <- 20
 chn.dir <- "out/"
 sum.dir <- "summaries/"
+new.dir <- "data/strat_1pct/"
 mods <- c("Cens", "Clim", "ClimCens", "Topo", 
           "TopoCens", "TopoClim", "TopoClimCens")
 
 p.c <- makeCluster(n.cores); registerDoSNOW(p.c)
 foreach(m=1:7) %dopar% {
-  Packages <- c("rstan", "coda", "bayesplot", "tidyverse", "loo", "doSNOW")
+  Packages <- c("rstan", "coda", "bayesplot", "tidyverse", 
+                "loo", "doSNOW", "sevcheck")
   suppressMessages(invisible(lapply(Packages, library, character.only=TRUE)))
   
   # read in chains
   f.m <- list.files(chn.dir, 
                     pattern=paste0("_", mods[m], "_"),
                     full.names=TRUE)
-  out.stan <-  f.m %>% read_stan_csv
-  out <-  out.stan %>% As.mcmc.list
+  out.stan <-  read_stan_csv(f.m)
+  out <-  As.mcmc.list(out.stan)
   
   # thin by n.thin
   n.it <- niter(out)
@@ -35,6 +51,31 @@ foreach(m=1:7) %dopar% {
   out <- as.mcmc.list(lapply(out, function(x) mcmc(x[th.it.chn,])))
   #out.stan <- apply(rstan::extract(out.stan, permuted=F)[th.it.chn,,], 3, rbind)
   out.all <- as.mcmc(do.call(rbind, out))
+  
+  # calculate out of sample predictive error
+  ## set up
+  oos.d <- read_rdump(paste0(new.dir, mods[m], ".Rdump"))
+  di <- oos.d$di
+  nX_d <- di[1]:di[2]
+  new.Y1 <- oos.d$Y1
+  new.Y1 <- cbind(new.Y1, 1-rowSums(new.Y1))
+  beta_d <- out.all[, grepl("beta_d", varnames(out.all))]
+  beta_p <- out.all[, grepl("beta_p", varnames(out.all))]
+  new.pred <- array(dim=c(nrow(oos.d$Y2), ncol(oos.d$Y2)+2, nrow(beta_d)))
+  for(i in 1:nrow(beta_d)) {
+    ## generate predictions
+    new.pred[,1,i] <- oos.d$Y2[,1] + oos.d$X[,nX_d] %*% beta_d[i,di[1]:di[2]]
+    new.pred[,2,i] <- oos.d$Y2[,2] + oos.d$X[,nX_d] %*% beta_d[i,di[3]:di[4]]
+    new.pred[,3,i] <- oos.d$Y2[,3] + oos.d$X[,nX_d] %*% beta_d[i,di[5]:di[6]]
+    new.pred[,4,i] <- (oos.d$Y2[,4] + oos.d$X[,nX_d] %*% beta_d[i,di[7]:di[8]])*
+      antilogit(oos.d$X %*% beta_p[i,])
+    new.pred[,5,i] <- (oos.d$Y2[,4] + oos.d$X[,nX_d] %*% beta_d[i,di[7]:di[8]])*
+      (1-antilogit(oos.d$X %*% beta_p[i,]))
+    new.pred[,,i] <- t(apply(new.pred[,,i], 1, tr_gjam_inv))
+  }
+  ## calculate out of sample validation score
+  pred.mn <- apply(new.pred, 1:2, mean)
+  MSPE <- sum((new.Y1 - pred.mn)^2/prod(dim(new.Y1)))
   
   # calculate WAIC
   LL <- as.matrix(out.all[,grepl("log_lik", varnames(out.all))])
@@ -53,7 +94,7 @@ foreach(m=1:7) %dopar% {
   summary.m <- cbind(summary.m, qmn.m$quantiles)
   
   # diagnostics
-  out.beta <- out[,grepl("beta", varnames(out))]
+  out.beta <- out[, grepl("beta", varnames(out))]
   geweke.m <- geweke.diag(out.beta)
   gelman.m <- gelman.diag(out.beta)
   rhats <- rhat(out.stan)
@@ -70,6 +111,7 @@ foreach(m=1:7) %dopar% {
   write.csv(rhats.beta, paste0(sum.dir, "rhat_beta_", mods[m], ".csv"))
   saveRDS(waic.m, paste0(sum.dir, "waic_", mods[m], ".rds"))
   saveRDS(loo.m, paste0(sum.dir, "loo_", mods[m], ".rds"))
+  saveRDS(MSPE, paste0(sum.dir, "MSPE_", mods[m], ".rds"))
   
 }
 stopCluster(p.c)
