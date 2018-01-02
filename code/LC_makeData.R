@@ -11,13 +11,21 @@ strat.id <- read_csv("data/stratified_sample_15pct_20a_rowID.csv")
 NH_df <- data_df %>% filter(!Set) %>%
   arrange(left, top)
 strat_df <- NH_df[strat.id$id,]
+oos_df <- NH_df[-strat.id$id,]
 
 d.b <- list(n1=nrow(strat_df), L=6, #n2=nFit+1, n3=nrow(data_df), L=6,
             Y1=as.matrix(strat_df[, c(8:10,12:13)]), # OpI,OpU,Dec,Evg,WP
             Y2=as.matrix(strat_df[, c(14:16,18)]))  # OpI,OpU,Dec,Evg
+d.b.oos <- list(n1=nrow(oos_df), L=6,
+                Y1=as.matrix(oos_df[, c(8:10,12:13)]),
+                Y2=as.matrix(oos_df[, c(14:16,18)]))
 
 # arrange covariate sets
 X.all <- scale(with(strat_df, cbind(el_mean, rugg_mean,
+                                    bio1_mean, bio7_mean, bio12_mean,
+                                    pop, hms, rdLen_,
+                                    pWP_mean)))
+X.oos <- scale(with(oos_df, cbind(el_mean, rugg_mean,
                                     bio1_mean, bio7_mean, bio12_mean,
                                     pop, hms, rdLen_,
                                     pWP_mean)))
@@ -25,6 +33,7 @@ colnames(X.all) <- c("el", "rugg",
                      "temp", "seas", "precip",
                      "pop", "homes", "roads",
                      "pWP")
+colnames(X.oos) <- colnames(X.all)
 X.id <- tibble(var=colnames(X.all),
                cat=rep(c("topo", "clim", "census", "pWP"), c(2,3,3,1)))
 X.ls <- list(
@@ -53,11 +62,16 @@ make_d <- function(X.i, mod.nm, X.all, d.b) {
 }
 
 d.ls <- map2(X.ls, names(X.ls), make_d, X.all, d.b)
+d.oos.ls <- map2(X.ls, names(X.ls), make_d, X.oos, d.b.oos)
 
 for(i in 1:7) {
   rstan::stan_rdump(ls(d.ls[[i]][1:8]),
                     file=paste0("data/strat_15pct/", names(d.ls)[i], ".Rdump"),
                     envir=list2env(d.ls[[i]]))
+  rstan::stan_rdump(ls(d.oos.ls[[i]][1:8]),
+                    file=paste0("data/strat_15pct_85oos/", 
+                                names(d.oos.ls)[i], ".Rdump"),
+                    envir=list2env(d.oos.ls[[i]]))
 }
 
 
