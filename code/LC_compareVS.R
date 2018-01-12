@@ -1,4 +1,4 @@
-# This script analyses the results of LC_processVS_hpc.R
+# This script analyzes the results of LC_processVS_hpc.R
 
 Packages <- c("rstan", "coda", "ggmcmc", "bayesplot", "tidyverse", 
               "loo", "purrr")
@@ -23,11 +23,22 @@ map(beta.fls, readRDS) %>%
 map(beta.fls, readRDS) %>% map(., ~(ggs_autocorrelation(ggs(.x))))
 map(beta.fls, readRDS) %>% map(., ~(ggs_geweke(ggs(.x))))
 map(beta.fls, readRDS) %>% map(., ~(ggs_Rhat(ggs(.x))))
+map(beta.fls, readRDS) %>% 
+  map(., ~(ggs_pairs(ggs(.x), lower=list(continuous="density"))))
 map(beta.fls, readRDS) %>%
   map(., ~(ggs_running(ggs(.x)) + facet_wrap(~Parameter, scales="free")))
 map(beta.fls, readRDS) %>%
   map(., ~(ggs_compare_partial(ggs(.x)) + facet_wrap(~Parameter, scales="free")))
 
+
+# effective sample size
+par(mfrow=c(3,3))
+map(beta.fls, readRDS) %>% 
+  walk(., ~hist(effectiveSize(.), main="", xlab="Effective Sample Size"))
+par(mfrow=c(3,3))
+map(beta.fls, readRDS) %>% 
+  walk(., ~hist(effectiveSize(.)/(250*6), main="",
+                xlab="n_eff/n_iter", xlim=c(0,1.5)))
 
 # WAIC
 waic.ls <- map(list.files(sum.dir, pattern="waic", full.names=TRUE), readRDS) 
