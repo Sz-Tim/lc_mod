@@ -7,7 +7,7 @@
 # - Calculate HPDIs, mean, median, sd for each parameter
 # - Store summarized output as a csv for each model
 
-Packages <- c("rstan", "coda", "bayesplot", "tidyverse", 
+Packages <- c("rstan", "coda", "bayesplot", "tidyverse", "rarhsmm",
               "loo", "doSNOW", "sevcheck")
 suppressMessages(invisible(lapply(Packages, library, character.only=TRUE)))
 tr_gjam_inv <- function(w, a=0.99) {
@@ -36,7 +36,7 @@ write("", "LC_proc.output")
 p.c <- makeCluster(n.cores); registerDoSNOW(p.c)
 foreach(m=1:7) %dopar% {
 #for(m in 1:7) {
-  Packages <- c("rstan", "coda", "bayesplot", "tidyverse", 
+  Packages <- c("rstan", "coda", "bayesplot", "tidyverse", "rarhsmm",
                 "loo", "doSNOW", "sevcheck", "data.table")
   suppressMessages(invisible(lapply(Packages, library, character.only=TRUE)))
   
@@ -74,7 +74,8 @@ foreach(m=1:7) %dopar% {
   beta_d <- out.all[, grepl("beta_d", varnames(out.all))]
   beta_p <- out.all[, grepl("beta_p", varnames(out.all))]
   new.pred <- array(dim=c(nrow(oos.d$Y2), ncol(oos.d$Y2)+2, nrow(beta_d)))
-  for(i in 1:nrow(beta_d)) {
+  lppd <- array(dim=dim(new.pred))
+  for(i in 1:dim(new.pred)[3]) { # iterations
     ## generate predictions
     new.pred[,1,i] <- oos.d$Y2[,1] + oos.d$X[,nX_d] %*% beta_d[i,di[1]:di[2]]
     new.pred[,2,i] <- oos.d$Y2[,2] + oos.d$X[,nX_d] %*% beta_d[i,di[3]:di[4]]
@@ -84,8 +85,13 @@ foreach(m=1:7) %dopar% {
     new.pred[,5,i] <- (oos.d$Y2[,4] + oos.d$X[,nX_d] %*% beta_d[i,di[7]:di[8]])*
       (1-antilogit(oos.d$X %*% beta_p[i,]))
     new.pred[,,i] <- t(apply(new.pred[,,i], 1, tr_gjam_inv))
+    ## calculate pointwise predictive density
+    for(j in 1:dim(new.pred)[1]) { # pixels
+      lppd[j,,i] <- mvdnorm(new.pred[j,,i], new.Y1[j,], cov.Y2[i])
+    }
   }
-  ## calculate out of sample validation score
+  ## calculate oos scores
+  lpd <- -sum(log(apply(lppd, 1:2, mean)))/prod(dim(new.Y1))
   pred.mn <- apply(new.pred, 1:2, mean)
   MSPE <- sum((new.Y1 - pred.mn)^2/prod(dim(new.Y1)))
   rm(new.Y1); rm(beta_d); rm(beta_p); rm(oos.d)
