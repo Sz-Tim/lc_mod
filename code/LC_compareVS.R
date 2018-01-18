@@ -39,6 +39,7 @@ par(mfrow=c(3,3))
 map(beta.fls, readRDS) %>% 
   walk(., ~hist(effectiveSize(.)/(250*6), main="",
                 xlab="n_eff/n_iter", xlim=c(0,1.5)))
+par(mfrow=c(1,1))
 
 # WAIC
 waic.ls <- map(list.files(sum.dir, pattern="waic", full.names=TRUE), readRDS) 
@@ -54,6 +55,7 @@ names(loo.ls) <- mods
 map_dbl(loo.ls, ~(.$looic)) %>% sort
 compare(loo.ls[[1]], loo.ls[[2]], loo.ls[[3]], loo.ls[[4]], 
         loo.ls[[5]], loo.ls[[6]], loo.ls[[7]])
+map(loo.ls, plot)
 
 
 # OOS prediction
