@@ -59,7 +59,7 @@ parameters {
   vector[L-1] nu[n1];
   //thetas: QR decomposition slopes
   vector[nB_p] theta_p;  //pr(WP|Evg) betas (QR decomposition)
-  vector[n_beta_d] theta_d_z;  //bias betas (QR decomposition)
+  vector[n_beta_d] theta_d_z;  //bias betas (QR decomposition, non-centered)
   real<lower=0> theta_d_scale;  //bias beta scale (so theta_d_z ~ N(0,1))
 }
 

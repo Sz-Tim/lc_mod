@@ -7,8 +7,8 @@
 # - Calculate HPDIs, mean, median, sd for each parameter
 # - Store summarized output as a csv for each model
 
-Packages <- c("rstan", "coda", "bayesplot", "tidyverse", 
-              "loo", "doSNOW", "sevcheck")
+Packages <- c("rstan", "coda", "bayesplot", "tidyverse", "rarhsmm",
+              "loo", "doSNOW", "sevcheck", "data.table")
 suppressMessages(invisible(lapply(Packages, library, character.only=TRUE)))
 tr_gjam_inv <- function(w, a=0.99) {
   eta <- w[-length(w)]
@@ -24,7 +24,7 @@ tr_gjam_inv <- function(w, a=0.99) {
   c(eta, 1-sum(eta)) 
 }
 
-n.cores <- 1
+n.cores <- 2
 n.thin <- 20
 chn.dir <- "out/"
 sum.dir <- "summaries/"
@@ -36,7 +36,7 @@ write("", "LC_proc.output")
 p.c <- makeCluster(n.cores); registerDoSNOW(p.c)
 foreach(m=1:7) %dopar% {
 #for(m in 1:7) {
-  Packages <- c("rstan", "coda", "bayesplot", "tidyverse", 
+  Packages <- c("rstan", "coda", "bayesplot", "tidyverse", "rarhsmm",
                 "loo", "doSNOW", "sevcheck", "data.table")
   suppressMessages(invisible(lapply(Packages, library, character.only=TRUE)))
   
@@ -48,11 +48,13 @@ foreach(m=1:7) %dopar% {
   # read in chains
   out.dt <- vector("list", length(f.m))
   for(i in seq_along(f.m)) {
+    write(paste("", m, mods[m], "chain", i), "LC_proc.output", append=T)
     v.nm <- fread(paste("sed '/^#/ d'", f.m[i]), sep=",", nrows=0)
     col.exc <- grep(paste(c("nu", "Y2"), collapse="|"), names(v.nm))
     out.dt[[i]] <- as.mcmc(fread(paste("sed '/^#/ d'", f.m[i]), drop=col.exc))
   }
   out <- as.mcmc.list(out.dt)
+  rm(out.dt)
   
   # thin by n.thin
   write(paste(m, mods[m], "Thinning"), "LC_proc.output", append=T)
@@ -71,8 +73,10 @@ foreach(m=1:7) %dopar% {
   new.Y1 <- cbind(new.Y1, 1-rowSums(new.Y1))
   beta_d <- out.all[, grepl("beta_d", varnames(out.all))]
   beta_p <- out.all[, grepl("beta_p", varnames(out.all))]
+  cov.Y2 <- out.all[, grepl("L_Sigma.2", varnames(out.all), fixed=TRUE)]
   new.pred <- array(dim=c(nrow(oos.d$Y2), ncol(oos.d$Y2)+2, nrow(beta_d)))
-  for(i in 1:nrow(beta_d)) {
+  lppd <- array(dim=c(nrow(oos.d$Y2), ncol(oos.d$Y2)+1, nrow(beta_d)))
+  for(i in 1:dim(new.pred)[3]) { # iterations
     ## generate predictions
     new.pred[,1,i] <- oos.d$Y2[,1] + oos.d$X[,nX_d] %*% beta_d[i,di[1]:di[2]]
     new.pred[,2,i] <- oos.d$Y2[,2] + oos.d$X[,nX_d] %*% beta_d[i,di[3]:di[4]]
@@ -82,16 +86,27 @@ foreach(m=1:7) %dopar% {
     new.pred[,5,i] <- (oos.d$Y2[,4] + oos.d$X[,nX_d] %*% beta_d[i,di[7]:di[8]])*
       (1-antilogit(oos.d$X %*% beta_p[i,]))
     new.pred[,,i] <- t(apply(new.pred[,,i], 1, tr_gjam_inv))
+    ## calculate pointwise predictive density
+    cov.mx <- matrix(cov.Y2[i,], nrow=5)
+    for(j in 1:dim(new.pred)[1]) { # pixels
+      lppd[j,,i] <- mvdnorm(rbind(new.pred[j,-6,i]), new.Y1[j,-6], 
+                            cov.mx, logd=FALSE)
+    }
   }
-  ## calculate out of sample validation score
+  ## calculate oos scores
+  lpd <- -sum(log(apply(lppd, 1:2, mean)))/prod(dim(new.Y1[,-6]))
   pred.mn <- apply(new.pred, 1:2, mean)
   MSPE <- sum((new.Y1 - pred.mn)^2/prod(dim(new.Y1)))
+  rm(new.Y1); rm(beta_d); rm(beta_p); rm(oos.d)
   
   # calculate WAIC
   write(paste(m, mods[m], "WAIC & LOO"), "LC_proc.output", append=T)
   LL <- as.matrix(out.all[,grepl("log_lik", varnames(out.all))])
+  n1 <- ncol(LL)/2
+  LL <- LL[,1:n1] + LL[,n1+(1:n1)]
   waic.m <- waic(LL)
   loo.m <- loo(LL)
+  rm(LL)
   
   # calculate HPD intervals
   write(paste(m, mods[m], "HPD intervals"), "LC_proc.output", append=T)
@@ -104,6 +119,7 @@ foreach(m=1:7) %dopar% {
   summary.m <- do.call(cbind, hpd.ls)
   summary.m <- cbind(summary.m, qmn.m$statistics)
   summary.m <- cbind(summary.m, qmn.m$quantiles)
+  rm(qmn.m); rm(hpd.ls)
   
   # diagnostics
   write(paste(m, mods[m], "Running diagnostics"), "LC_proc.output", append=T)
@@ -122,7 +138,11 @@ foreach(m=1:7) %dopar% {
   saveRDS(waic.m, paste0(sum.dir, "waic_", mods[m], ".rds"))
   saveRDS(loo.m, paste0(sum.dir, "loo_", mods[m], ".rds"))
   saveRDS(MSPE, paste0(sum.dir, "MSPE_", mods[m], ".rds"))
-  
+  saveRDS(lpd, paste0(sum.dir, "lpd_", mods[m], ".rds"))
+  saveRDS(new.pred, paste0(sum.dir, "new_pred_", mods[m], ".rds"))
+  saveRDS(pred.mn, paste0(sum.dir, "pred_mn_", mods[m], ".rds"))
+  rm(out.all); rm(out); rm(out.beta); rm(summary.m); rm(geweke.m)
+  rm(gelman.m); rm(waic.m); rm(loo.m); rm(MSPE); rm(new.pred); rm(pred.mn)
 }
 stopCluster(p.c)
 
