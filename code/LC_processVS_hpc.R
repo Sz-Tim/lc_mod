@@ -8,7 +8,7 @@
 # - Store summarized output as a csv for each model
 
 Packages <- c("rstan", "coda", "bayesplot", "tidyverse", "rarhsmm",
-              "loo", "doSNOW", "sevcheck")
+              "loo", "doSNOW", "sevcheck", "data.table")
 suppressMessages(invisible(lapply(Packages, library, character.only=TRUE)))
 tr_gjam_inv <- function(w, a=0.99) {
   eta <- w[-length(w)]
@@ -73,8 +73,9 @@ foreach(m=1:7) %dopar% {
   new.Y1 <- cbind(new.Y1, 1-rowSums(new.Y1))
   beta_d <- out.all[, grepl("beta_d", varnames(out.all))]
   beta_p <- out.all[, grepl("beta_p", varnames(out.all))]
+  cov.Y2 <- out.all[, grepl("L_Sigma.2", varnames(out.all), fixed=TRUE)]
   new.pred <- array(dim=c(nrow(oos.d$Y2), ncol(oos.d$Y2)+2, nrow(beta_d)))
-  lppd <- array(dim=dim(new.pred))
+  lppd <- array(dim=c(nrow(oos.d$Y2), ncol(oos.d$Y2)+1, nrow(beta_d)))
   for(i in 1:dim(new.pred)[3]) { # iterations
     ## generate predictions
     new.pred[,1,i] <- oos.d$Y2[,1] + oos.d$X[,nX_d] %*% beta_d[i,di[1]:di[2]]
@@ -86,12 +87,14 @@ foreach(m=1:7) %dopar% {
       (1-antilogit(oos.d$X %*% beta_p[i,]))
     new.pred[,,i] <- t(apply(new.pred[,,i], 1, tr_gjam_inv))
     ## calculate pointwise predictive density
+    cov.mx <- matrix(cov.Y2[i,], nrow=5)
     for(j in 1:dim(new.pred)[1]) { # pixels
-      lppd[j,,i] <- mvdnorm(new.pred[j,,i], new.Y1[j,], cov.Y2[i])
+      lppd[j,,i] <- mvdnorm(rbind(new.pred[j,-6,i]), new.Y1[j,-6], 
+                            cov.mx, logd=FALSE)
     }
   }
   ## calculate oos scores
-  lpd <- -sum(log(apply(lppd, 1:2, mean)))/prod(dim(new.Y1))
+  lpd <- -sum(log(apply(lppd, 1:2, mean)))/prod(dim(new.Y1[,-6]))
   pred.mn <- apply(new.pred, 1:2, mean)
   MSPE <- sum((new.Y1 - pred.mn)^2/prod(dim(new.Y1)))
   rm(new.Y1); rm(beta_d); rm(beta_p); rm(oos.d)
@@ -135,6 +138,7 @@ foreach(m=1:7) %dopar% {
   saveRDS(waic.m, paste0(sum.dir, "waic_", mods[m], ".rds"))
   saveRDS(loo.m, paste0(sum.dir, "loo_", mods[m], ".rds"))
   saveRDS(MSPE, paste0(sum.dir, "MSPE_", mods[m], ".rds"))
+  saveRDS(lpd, paste0(sum.dir, "lpd_", mods[m], ".rds"))
   saveRDS(new.pred, paste0(sum.dir, "new_pred_", mods[m], ".rds"))
   saveRDS(pred.mn, paste0(sum.dir, "pred_mn_", mods[m], ".rds"))
   rm(out.all); rm(out); rm(out.beta); rm(summary.m); rm(geweke.m)
