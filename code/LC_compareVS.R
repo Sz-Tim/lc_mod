@@ -14,13 +14,18 @@ mods <- c("Cens", "Clim", "ClimCens", "Topo",
           "TopoCens", "TopoClim", "TopoClimCens")
 
 # GGMCMC
+ac_cols <- c(rgb(0,0,0,0.5), rgb(1,0,0,0.5), rgb(0,1,0,0.5), 
+             rgb(0,0,1,0.5), rgb(1,1,0,0.5), rgb(1,0,1,0.5))
 beta.fls <- list.files(sum.dir, pattern="out_betas_", full.names=TRUE)
 names(beta.fls) <- mods
 map(beta.fls, readRDS) %>%
   map(., ~(ggs_density(ggs(.x)) + facet_wrap(~Parameter, scales="free")))
 map(beta.fls, readRDS) %>%
   map(., ~(ggs_traceplot(ggs(.x)) + facet_wrap(~Parameter, scales="free")))
-map(beta.fls, readRDS) %>% map(., ~(ggs_autocorrelation(ggs(.x))))
+map(beta.fls, readRDS) %>% map(., ~(ggs_autocorrelation(ggs(.x)) + 
+                                      facet_wrap(~Parameter) +
+                                      scale_fill_manual(values=rep(NA,6)) +
+                                      scale_colour_manual(values=ac_cols)))
 map(beta.fls, readRDS) %>% map(., ~(ggs_geweke(ggs(.x))))
 map(beta.fls, readRDS) %>% map(., ~(ggs_Rhat(ggs(.x))))
 map(beta.fls, readRDS) %>% 
@@ -39,6 +44,8 @@ par(mfrow=c(3,3))
 map(beta.fls, readRDS) %>% 
   walk(., ~hist(effectiveSize(.)/(250*6), main="",
                 xlab="n_eff/n_iter", xlim=c(0,1.5)))
+par(mfrow=c(1,1))
+
 
 # WAIC
 waic.ls <- map(list.files(sum.dir, pattern="waic", full.names=TRUE), readRDS) 
@@ -54,12 +61,16 @@ names(loo.ls) <- mods
 map_dbl(loo.ls, ~(.$looic)) %>% sort
 compare(loo.ls[[1]], loo.ls[[2]], loo.ls[[3]], loo.ls[[4]], 
         loo.ls[[5]], loo.ls[[6]], loo.ls[[7]])
+map(loo.ls, plot)
 
 
 # OOS prediction
 mspe.ls <- map(list.files(sum.dir, pattern="MSPE", full.names=TRUE), readRDS)
 names(mspe.ls) <- mods
 map_dbl(mspe.ls, sqrt) %>% sort
+lpd.ls <- map(list.files(sum.dir, pattern="lpd", full.names=TRUE), readRDS)
+names(lpd.ls) <- mods
+map_dbl(lpd.ls, c) %>% sort
 
 
 # Gelman
