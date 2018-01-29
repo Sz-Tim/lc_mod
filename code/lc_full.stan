@@ -37,15 +37,20 @@ data {
   int nB_p;  //number of covariates for pr(WP|Evg)
   vector<lower=0, upper=1>[L-1] Y1[n1];  //GRANIT proportions
   matrix<lower=0, upper=1>[n3,L-2] Y2;  //NLCD proportions
-  matrix[n3,nB_p] X;  //covariates
+  matrix[n1,nB_p] X;  //covariates
+  matrix[n3-n1,nB_p] X_p;  //covariates
 }
 
 transformed data {
   int n_beta_d = nB_d*(L-2);  //total number of beta_ds
-  real qr_n = n3-1;  //avoids cmdstan ambiguity with sqrt
-  matrix[n3,nB_p] Q = qr_Q(X)[,1:nB_p] * sqrt(qr_n);
-  matrix[nB_p,nB_p] R = qr_R(X)[1:nB_p,] / sqrt(qr_n);
+  real qr_n1 = n1-1;  //avoids cmdstan ambiguity with sqrt
+  matrix[n1,nB_p] Q = qr_Q(X)[,1:nB_p] * sqrt(qr_n1);
+  matrix[nB_p,nB_p] R = qr_R(X)[1:nB_p,] / sqrt(qr_n1);
   matrix[nB_p,nB_p] R_inv = inverse(R);
+  real qr_n3 = (n3-n1)-1;  //avoids cmdstan ambiguity with sqrt
+  matrix[n3-n1,nB_p] Q_p = qr_Q(X_p)[,1:nB_p] * sqrt(qr_n3);
+  matrix[nB_p,nB_p] R_p = qr_R(X_p)[1:nB_p,] / sqrt(qr_n3);
+  matrix[nB_p,nB_p] R_p_inv = inverse(R_p);
 }
 
 parameters {
@@ -96,16 +101,16 @@ generated quantities {
   vector[L-1] Y2_p_[n3-n1];  //unbiased, split NLCD
   vector[nB_p] beta_p = R_inv * theta_p;
   vector[n_beta_d] beta_d;
-  beta_d[di[1]:di[2]] = R_inv[2:nB_p,2:nB_p] * theta_d[di[1]:di[2]];
-  beta_d[di[3]:di[4]] = R_inv[2:nB_p,2:nB_p] * theta_d[di[3]:di[4]];
-  beta_d[di[5]:di[6]] = R_inv[2:nB_p,2:nB_p] * theta_d[di[5]:di[6]];
-  beta_d[di[7]:di[8]] = R_inv[2:nB_p,2:nB_p] * theta_d[di[7]:di[8]];
+  beta_d[di[1]:di[2]] = R_p_inv[2:nB_p,2:nB_p] * theta_d[di[1]:di[2]];
+  beta_d[di[3]:di[4]] = R_p_inv[2:nB_p,2:nB_p] * theta_d[di[3]:di[4]];
+  beta_d[di[5]:di[6]] = R_p_inv[2:nB_p,2:nB_p] * theta_d[di[5]:di[6]];
+  beta_d[di[7]:di[8]] = R_p_inv[2:nB_p,2:nB_p] * theta_d[di[7]:di[8]];
 
   {
-    vector[n3-n1] pWP_p = inv_logit(Q[n2:n3] * theta_p);
+    vector[n3-n1] pWP_p = inv_logit(Q_p * theta_p);
     matrix[n3-n1,L-2] bias_p;
     for(i in 1:4) {
-      bias_p[,i] = Q[n2:n3,2:nB_p] * theta_d[di[i+i-1]:di[i+i]];
+      bias_p[,i] = Q_p[,2:nB_p] * theta_d[di[i+i-1]:di[i+i]];
     }
     Y2_p_[,1] = to_array_1d(Y2[n2:n3,1] + bias_p[,1]);
     Y2_p_[,2] = to_array_1d(Y2[n2:n3,2] + bias_p[,2]);
