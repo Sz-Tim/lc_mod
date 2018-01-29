@@ -58,7 +58,8 @@ make_d <- function(X.i, mod.nm, X.all, d.b) {
   d_i[c(1,3,5,7)] <- seq(1, nX[1]*3+1, by=nX[1])
   d_i[c(2,4,6,8)] <- seq(nX[1], nX[1]*4, by=nX[1])
   d.b$nB_d=nX[1]; d.b$nB_p=nX[5]; d.b$di=d_i
-  d.b$X=X.all[,X.i[[5]]]
+  d.b$X=X.all[1:d.b$n1,X.i[[5]]]
+  d.b$X_p=X.all[d.b$n2:d.b$n3,X.i[[5]]]
   d.b$mod=mod.nm
   return(d.b)
 }
@@ -67,7 +68,7 @@ d.ls <- map2(X.ls, names(X.ls), make_d, X.all, d.b)
 d.oos.ls <- map2(X.ls, names(X.ls), make_d, X.oos, d.b.oos)
 
 for(i in 1:7) {
-  rstan::stan_rdump(ls(d.ls[[i]][1:8]),
+  rstan::stan_rdump(ls(d.ls[[i]][1:11]),
                     file=paste0("data/full/", names(d.ls)[i], ".Rdump"),
                     envir=list2env(d.ls[[i]]))
   # rstan::stan_rdump(ls(d.oos.ls[[i]][1:8]),
