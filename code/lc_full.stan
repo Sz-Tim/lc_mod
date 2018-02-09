@@ -58,13 +58,14 @@ parameters {
   vector<lower=0>[L-1] L_sigma[2];  //landcover: covariance
   vector[L-1] nu[n1];  //landcover: latent, unconstrained
   vector[nB_p] theta_p;  //pr(WP|Evg) betas (QR decomposition)
+  vector[n_beta_d] theta_d_std;  //bias betas (QR decomposition, non-centered)
   vector[n_beta_d] theta_d_z;  //bias betas (QR decomposition, non-centered)
   real<lower=0> theta_d_scale;  //bias betas (QR decomposition, non-centered)
 }
 
 transformed parameters {
   vector[L-1] Y2_[n1];  //NLCD split & unbiased  
-  vector[n_beta_d] theta_d = theta_d_z * theta_d_scale;
+  vector[n_beta_d] theta_d = theta_d_z + theta_d_std * theta_d_scale;
   {
     vector[n1] pWP = inv_logit(Q[1:n1,] * theta_p);
     matrix[n1,L-2] bias;
@@ -90,6 +91,7 @@ model {
     nu[,l] ~ normal(0.5, 1);
   }
   theta_p ~ normal(0, 1);
+  theta_d_std ~ normal(0, 1);
   theta_d_z ~ normal(0, 1);
   theta_d_scale ~ normal(0, 1);
   Y1 ~ multi_normal_cholesky(nu, L_Sigma[1]);

@@ -59,8 +59,9 @@ parameters {
   vector[L-1] nu[n1];
   //thetas: QR decomposition slopes
   vector[nB_p] theta_p;  //pr(WP|Evg) betas (QR decomposition)
+  vector[n_beta_d] theta_d_std;  //bias betas (QR decomposition, non-centered)
   vector[n_beta_d] theta_d_z;  //bias betas (QR decomposition, non-centered)
-  real<lower=0> theta_d_scale;  //bias beta scale (so theta_d_z ~ N(0,1))
+  real<lower=0> theta_d_scale;  //bias beta scale (so theta_d_std ~ N(0,1))
 }
 
 transformed parameters {
@@ -73,7 +74,7 @@ transformed parameters {
     L_Sigma[j] = diag_pre_multiply(L_sigma[j], L_Omega[j]);
   }
   
-  theta_d = theta_d_z * theta_d_scale;
+  theta_d = theta_d_z + theta_d_std * theta_d_scale;
   
   //correct bias and split WP to [,4] and Evg to [,5]
   {
@@ -105,6 +106,7 @@ model {
   
   //beta priors
   theta_p ~ normal(0, 1);
+  theta_d_std ~ normal(0, 1);
   theta_d_z ~ normal(0, 1);
   theta_d_scale ~ normal(0, 1);
   
