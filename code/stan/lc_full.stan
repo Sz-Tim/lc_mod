@@ -98,6 +98,7 @@ generated quantities {
   vector[d] Y2_pred_[n3-n1];  //unbiased, split Y2
   vector[nTh] theta = RZ_inv * theta_qr;
   vector[n_beta] beta;
+  vector[n1] log_lik;
 
   for(i in 1:(d-1)) {
     beta[ri[i+i-1]:ri[i+i]] = RZ_inv[2:nTh,2:nTh] * beta_qr[ri[i+i-1]:ri[i+i]];
@@ -116,6 +117,8 @@ generated quantities {
   
   for(n in 1:n1) {
     n_eta[n] = tr_gjam_inv(nu[n], D, d);
+    log_lik[n] = multi_normal_cholesky_lpdf(Y1[n] | nu[n], L_Sigma[1]) +
+                 multi_normal_cholesky_lpdf(Y2_[n] | nu[n], L_Sigma[2]);
   }
   for(n in n2:n3) {
     n_eta[n] = tr_gjam_inv(Y2_pred_[n-n1], D, d);
