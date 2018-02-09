@@ -11,3 +11,6 @@ EDA_shared.Rmd
 NNGP.R
 summaries/
 thin_summaries/
+data/strat_15pct/
+data/strat_15pct_85oos/
+data/full/
