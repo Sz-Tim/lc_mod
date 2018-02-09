@@ -9,3 +9,5 @@ EDA_FIA.Rmd
 EDA_LC.Rmd
 EDA_shared.Rmd
 NNGP.R
+summaries/
+thin_summaries/
