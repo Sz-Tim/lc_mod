@@ -103,10 +103,10 @@ generated quantities {
   vector[L-1] Y2_p_[n3-n1];  //unbiased, split NLCD
   vector[nB_p] beta_p = R_inv * theta_p;
   vector[n_beta_d] beta_d;
-  beta_d[di[1]:di[2]] = R_p_inv[2:nB_p,2:nB_p] * theta_d[di[1]:di[2]];
-  beta_d[di[3]:di[4]] = R_p_inv[2:nB_p,2:nB_p] * theta_d[di[3]:di[4]];
-  beta_d[di[5]:di[6]] = R_p_inv[2:nB_p,2:nB_p] * theta_d[di[5]:di[6]];
-  beta_d[di[7]:di[8]] = R_p_inv[2:nB_p,2:nB_p] * theta_d[di[7]:di[8]];
+  beta_d[di[1]:di[2]] = R_inv[2:nB_p,2:nB_p] * theta_d[di[1]:di[2]];
+  beta_d[di[3]:di[4]] = R_inv[2:nB_p,2:nB_p] * theta_d[di[3]:di[4]];
+  beta_d[di[5]:di[6]] = R_inv[2:nB_p,2:nB_p] * theta_d[di[5]:di[6]];
+  beta_d[di[7]:di[8]] = R_inv[2:nB_p,2:nB_p] * theta_d[di[7]:di[8]];
 
   {
     vector[n3-n1] pWP_p = inv_logit(Q_p * theta_p);
