@@ -36,22 +36,22 @@ data {
   int n_t;  //number of covariates (theta) for p
   vector<lower=0, upper=1>[D-1] Y[n1];  //Y proportions
   matrix<lower=0, upper=1>[n3,D-2] Z;  //Z proportions
-  matrix[n1,n_t] W;  //covariates: fitting
-  matrix[n3-n1,n_t] W_new;  //covariates: predicting
+  matrix[n1,n_t] X;  //covariates: fitting
+  matrix[n3-n1,n_t] X_new;  //covariates: predicting
 }
 
 transformed data {
   int d = D-1;
   int tot_b = n_b*(d-1);  //total number of betas
-  //QR transformation for W
+  //QR transformation for X
   real qr_n1 = n1-1;  //avoids cmdstan ambiguity with sqrt(int)
-  matrix[n1,n_t] Q = qr_Q(W)[,1:n_t] * sqrt(qr_n1);
-  matrix[n_t,n_t] R = qr_R(W)[1:n_t,] / sqrt(qr_n1);
+  matrix[n1,n_t] Q = qr_Q(X)[,1:n_t] * sqrt(qr_n1);
+  matrix[n_t,n_t] R = qr_R(X)[1:n_t,] / sqrt(qr_n1);
   matrix[n_t,n_t] R_inv = inverse(R);
-  //QR transformation for W_new
+  //QR transformation for X_new
   real qr_n3 = (n3-n1)-1;  //avoids cmdstan ambiguity with sqrt(int)
-  matrix[n3-n1,n_t] Q_new = qr_Q(W_new)[,1:n_t] * sqrt(qr_n3);
-  matrix[n_t,n_t] R_new = qr_R(W_new)[1:n_t,] / sqrt(qr_n3);
+  matrix[n3-n1,n_t] Q_new = qr_Q(X_new)[,1:n_t] * sqrt(qr_n3);
+  matrix[n_t,n_t] R_new = qr_R(X_new)[1:n_t,] / sqrt(qr_n3);
   matrix[n_t,n_t] R_new_inv = inverse(R_new);
 }
 
@@ -79,7 +79,7 @@ transformed parameters {
     }
     rho[,d-1] = Q[,2:n_t] * beta_qr[ri[d+d-3]:ri[d+d-2]];
     Z_[,d-1] = to_array_1d((Z[1:n1,d-1] + rho[,d-1]) .* p);
-    Z_[,d] = to_array_1d((Z[1:n1,d] + rho[,d-1]) .* (1-p));
+    Z_[,d] = to_array_1d((Z[1:n1,d-1] + rho[,d-1]) .* (1-p));
   }
 }
 
@@ -115,7 +115,7 @@ generated quantities {
     }
     rho_new[,d-1] = Q_new[,2:n_t] * beta_qr[ri[d+d-3]:ri[d+d-2]];
     Z_new_[,d-1] = to_array_1d((Z[n2:n3,d-1] + rho_new[,d-1]) .* p_new);
-    Z_new_[,d] = to_array_1d((Z[n2:n3,d] + rho_new[,d-1]) .* (1-p_new));
+    Z_new_[,d] = to_array_1d((Z[n2:n3,d-1] + rho_new[,d-1]) .* (1-p_new));
   }
   
   for(n in 1:n1) {
