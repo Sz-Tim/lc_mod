@@ -7,14 +7,12 @@ functions {
     real T_i;
     
     eta_i[1:d] = nu_i;
-    
     for(j in 1:d) {  
       if(eta_i[j] < 0)  eta_i[j] = 0; 
       if(eta_i[j] < 1)  nu_i_p_[j] = eta_i[j];
       else  nu_i_p_[j] = 1;
     }
     nu_i_p = sum(nu_i_p_);
-    
     if(nu_i_p >= 0.99) {
       T_i = (nu_i_p^(-1)) * (1 - (0.01)^(nu_i_p/0.99));
       while(sum(eta_i[1:d]) > 0.99) {

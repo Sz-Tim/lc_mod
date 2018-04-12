@@ -35,7 +35,9 @@ functions {
     if(nu_i_p >= 0.99) {
       T_i = (nu_i_p^(-1)) * (1 - (0.01)^(nu_i_p/0.99));
       while(sum(eta_i[1:d]) > 0.99) {
-        eta_i[1:d] = T_i * eta_i[1:d];
+        vector[5] tmp;
+        tmp = T_i * eta_i[1:d];
+        eta_i[1:d] = tmp;
       }
     }
     eta_i[D] = 1 - sum(eta_i[1:5]);
