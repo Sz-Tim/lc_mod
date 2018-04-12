@@ -129,7 +129,7 @@ transformed parameters {
     }
     rho[,d-1] = Q[,2:n_t] * beta_qr[ri[d+d-3]:ri[d+d-2]];
     Z_[,d-1] = to_array_1d((Z[1:n1,d-1] + rho[,d-1]) .* p + phi[1:n1,d-1]);
-    Z_[,d] = to_array_1d((Z[1:n1,d] + rho[,d-1]) .* (1-p) + phi[1:n1,d]);
+    Z_[,d] = to_array_1d((Z[1:n1,d-1] + rho[,d-1]) .* (1-p) + phi[1:n1,d]);
   }
 }
 
@@ -170,7 +170,7 @@ generated quantities {
     rho_new[,d-1] = Q_new[,2:n_t] * beta_qr[ri[d+d-3]:ri[d+d-2]];
     Z_new_[,d-1] = to_array_1d((Z[n2:n3,d-1] + rho_new[,d-1]) .* p_new 
                                 + phi[n2:n3,d-1]);
-    Z_new_[,d] = to_array_1d((Z[n2:n3,d] + rho_new[,d-1]) .* (1-p_new) 
+    Z_new_[,d] = to_array_1d((Z[n2:n3,d-1] + rho_new[,d-1]) .* (1-p_new) 
                               + phi[n2:n3,d]);
   }
   
