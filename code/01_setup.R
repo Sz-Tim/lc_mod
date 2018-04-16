@@ -44,10 +44,10 @@ for(i in seq_along(X.ls)) X.ls[[i]][[5]] <- c(9, X.ls[[i]][[5]])
 # <http://mc-stan.org/users/documentation/case-studies/mbjoseph-CARStan.html>
 # W: adjacency matrix with W[i,i]=0 and W[i,j]=ifelse(neighbors, 1, 0) 
 # W_n: number of adjacent pairs (count only W[i,j] or W[j,i] -- not both)
-L$x <- as.numeric(as.factor(L$lon))
-L$y <- as.numeric(as.factor(L$lat))
+L$x <- as.numeric(as.factor(L$lon)) # grid col index
+L$y <- as.numeric(as.factor(L$lat)) # grid row index
 dist_mx <- as.matrix(dist(data.frame(L$x, L$y)))
-W <- dist_mx <= sqrt(2)
+W <- dist_mx <= sqrt(2) # max 8 neighbors per cell
 diag(W) <- 0
 W_n <- sum(W)/2 
 
