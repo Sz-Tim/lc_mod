@@ -75,14 +75,12 @@ transformed data {
   matrix[n_t,n_t] R_new = qr_R(X_new)[1:n_t,] / sqrt(qr_n3);
   matrix[n_t,n_t] R_new_inv = inverse(R_new);
   //CAR
-  int W_sp[W_n, 2];   // adjacency pairs
+  int W_sp[W_n, 2];   // sparse representation of djacency pairs
   vector[n3] dist_sp;     // diagonal of D (number of neigbors for each site)
   vector[n3] lambda;       // eigenvalues of invsqrtD * W * invsqrtD
-  { // generate sparse representation for W
-  int counter;
-  counter = 1;
-  // loop over upper triangular part of W to identify neighbor pairs
-    for (i in 1:(n3 - 1)) {
+  { 
+    int counter = 1;
+    for (i in 1:(n3 - 1)) {// identify neighbor pairs with upper triangle of W
       for (j in (i + 1):n3) {
         if (W[i, j] == 1) {
           W_sp[counter, 1] = i;
@@ -95,9 +93,7 @@ transformed data {
   for (i in 1:n3) dist_sp[i] = sum(W[i]);
   {
     vector[n3] invsqrtD;  
-    for (i in 1:n3) {
-      invsqrtD[i] = 1 / sqrt(dist_sp[i]);
-    }
+    for (i in 1:n3) invsqrtD[i] = 1 / sqrt(dist_sp[i]);
     lambda = eigenvalues_sym(quad_form(W, diag_matrix(invsqrtD)));
   }
 }
@@ -179,7 +175,5 @@ generated quantities {
     log_lik[n] = multi_normal_cholesky_lpdf(Y[n] | nu[n], Sigma[1]) +
                  multi_normal_cholesky_lpdf(Z_[n] | nu[n], Sigma[2]);
   }
-  for(n in n2:n3) {
-    eta[n] = tr_gjam_inv(Z_new_[n-n1], D, d);
-  }
+  for(n in n2:n3) eta[n] = tr_gjam_inv(Z_new_[n-n1], D, d);
 }

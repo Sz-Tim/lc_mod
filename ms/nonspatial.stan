@@ -123,7 +123,5 @@ generated quantities {
     log_lik[n] = multi_normal_cholesky_lpdf(Y[n] | nu[n], Sigma[1]) +
                  multi_normal_cholesky_lpdf(Z_[n] | nu[n], Sigma[2]);
   }
-  for(n in n2:n3) {
-    eta[n] = tr_gjam_inv(Z_new_[n-n1], D, d);
-  }
+  for(n in n2:n3) eta[n] = tr_gjam_inv(Z_new_[n-n1], D, d);
 }
