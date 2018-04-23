@@ -149,6 +149,7 @@ model {
 
 generated quantities {
   vector[n1] log_lik;  //log likelihood for model comparison
+  vector[n3-n1] lppd;  //log pointwise predictive density for comparison
   simplex[D] eta[n3];  //gjam transformed nu
   vector[d] Z_new_[n3-n1];  //unbiased, split Z
   vector[n_t] theta = R_inv * theta_qr;
