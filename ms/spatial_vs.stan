@@ -148,8 +148,6 @@ model {
 }
 
 generated quantities {
-  vector[n1] log_lik;  //log likelihood for model comparison
-  vector[n3-n1] lppd;  //log pointwise predictive density for comparison
   simplex[D] eta[n3];  //gjam transformed nu
   vector[d] Z_new_[n3-n1];  //unbiased, split Z
   vector[n_t] theta = R_inv * theta_qr;
@@ -172,14 +170,6 @@ generated quantities {
                               + phi[n2:n3,d]);
   }
   
-  for(n in 1:n1) {
-    eta[n] = tr_gjam_inv(nu[n], D, d);
-    log_lik[n] = multi_normal_cholesky_lpdf(Y[n] | nu[n], Sigma[1]) +
-                 multi_normal_cholesky_lpdf(Z_[n] | nu[n], Sigma[2]);
-  }
-    for(n in n2:n3) {
-    eta[n] = tr_gjam_inv(Z_new_[n-n1], D, d);
-    lppd[n-n1] = multi_normal_cholesky_lpdf(Z_new_[n-n1] | 
-                                                      Y_new[n-n1], Sigma[2]);
-  }
+  for(n in 1:n1) eta[n] = tr_gjam_inv(nu[n], D, d);
+  for(n in n2:n3) eta[n] = tr_gjam_inv(Z_new_[n-n1], D, d);
 }

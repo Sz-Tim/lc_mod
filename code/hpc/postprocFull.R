@@ -40,15 +40,19 @@ out <- out %>%
          ID.LC=paste(CellID, LC, sep="_")) %>%
   group_by(CellID) %>% mutate(mnSc=Mean/sum(Mean)) %>% ungroup %>%
   arrange(LC, CellID) %>%
-  mutate(LC=factor(LC, labels=c("Opn", "Oth", "Dec", "WP", "Evg", "Mxd")),
+  mutate(LC=factor(LC, labels=c("Opn", "Oth", "Dec", "Evg", "WP", "Mxd")),
          GRANIT=with(data_df, c(nhlc1_mean, nhlc2_mean, nhlc3_mean,
-                                nhlc6_mean, nhlc5_mean, nhlc4_mean)),
+                                nhlc5_mean, nhlc6_mean, nhlc4_mean)),
          NLCD=with(data_df, c(nlcd1_mean, nlcd2_mean, nlcd3_mean,
                               nlcd5_mean*pWP_mean/100, 
-                              nlcd5_mean*(1-pWP_mean/100), nlcd4_mean))) %>%
+                              nlcd5_mean*(1-pWP_mean/100), nlcd4_mean)),
+         NLCD2=with(data_df, c(nlcd1_mean, nlcd2_mean, nlcd3_mean, 
+                              nlcd5_mean*(1-pWP_mean/100),
+                              nlcd5_mean*pWP_mean/100, nlcd4_mean))) %>%
   full_join(., data_df %>% select(left, top, Set, pWP_mean, CellID))
 sample_rows <- sample.int(nrow(out), size=ceiling(nrow(out)*.01))
 out.thin <- out[sample_rows,]
+write.csv(out, "out/20a_out.csv", row.names=F)
 
 
 # Maps: posterior
@@ -114,15 +118,18 @@ ggplot(out.thin, aes(x=GRANIT, xend=GRANIT, y=NLCD, yend=mnSc,
   facet_wrap(~LC) + geom_abline(linetype=3) +
   scale_colour_manual(values=c("red", "darkgreen"))
 out %>% group_by(LC) %>% 
-  summarise(NLCD.mn=mean(NLCD-GRANIT, na.rm=TRUE), 
-            NLCD.sd=sd(NLCD-GRANIT, na.rm=TRUE), 
+  summarise(NLCD.mn=mean(NLCD2-GRANIT, na.rm=TRUE), 
+            NLCD.sd=sd(NLCD2-GRANIT, na.rm=TRUE), 
             post.mn=mean(Mean-GRANIT, na.rm=TRUE),
             post.sd=sd(Mean-GRANIT, na.rm=TRUE),
             mn.diff=abs(post.mn)-abs(NLCD.mn), 
             sd.diff=post.sd-abs(NLCD.sd),
             mn.pct=mn.diff/abs(NLCD.mn),
             sd.pct=sd.diff/NLCD.sd)
-
+out %>% group_by(LC) %>%
+  summarise(RMSE_nlcd=sqrt(mean( (NLCD2-GRANIT)^2, na.rm=T )),
+            RMSE_mod=sqrt(mean( (Mean-GRANIT)^2, na.rm=T ))) %>%
+  mutate(pct_diff=(RMSE_mod - RMSE_nlcd)/RMSE_nlcd*100)
 
 
   

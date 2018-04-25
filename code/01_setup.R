@@ -53,6 +53,8 @@ cat(samp.id, file=samp.f)  # store row IDs in sample
 samp.id <- scan(samp.f)
 L.YZ$Fit <- 1:nrow(L.YZ) %in% samp.id
 L.YZ <- L.YZ %>% arrange(desc(Fit), cellID)
+write.csv(L.YZ, "data/L_YZ.csv", row.names=F)
+write.csv(L, "data/L_full.csv", row.names=F)
 
 
 ########
