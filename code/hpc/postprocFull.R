@@ -43,10 +43,7 @@ out <- out %>%
   mutate(LC=factor(LC, labels=c("Opn", "Oth", "Dec", "Evg", "WP", "Mxd")),
          GRANIT=with(data_df, c(nhlc1_mean, nhlc2_mean, nhlc3_mean,
                                 nhlc5_mean, nhlc6_mean, nhlc4_mean)),
-         NLCD=with(data_df, c(nlcd1_mean, nlcd2_mean, nlcd3_mean,
-                              nlcd5_mean*pWP_mean/100, 
-                              nlcd5_mean*(1-pWP_mean/100), nlcd4_mean)),
-         NLCD2=with(data_df, c(nlcd1_mean, nlcd2_mean, nlcd3_mean, 
+         NLCD=with(data_df, c(nlcd1_mean, nlcd2_mean, nlcd3_mean, 
                               nlcd5_mean*(1-pWP_mean/100),
                               nlcd5_mean*pWP_mean/100, nlcd4_mean))) %>%
   full_join(., data_df %>% select(left, top, Set, pWP_mean, CellID))
@@ -115,7 +112,7 @@ ggplot(out) + xlim(-1,1) + facet_wrap(~LC, scales="free_y") +
 ggplot(out.thin, aes(x=GRANIT, xend=GRANIT, y=NLCD, yend=mnSc,
                      colour=abs(mnSc-GRANIT) < abs(NLCD-GRANIT))) + 
   geom_segment(arrow=arrow(length=unit(0.03, "npc")), alpha=0.2) + 
-  facet_wrap(~LC) + geom_abline(linetype=3) +
+  facet_wrap(~LC) + geom_abline(linetype=3) + theme(legend.position="none") +
   scale_colour_manual(values=c("red", "darkgreen"))
 out %>% group_by(LC) %>% 
   summarise(NLCD.mn=mean(NLCD2-GRANIT, na.rm=TRUE), 
@@ -127,7 +124,7 @@ out %>% group_by(LC) %>%
             mn.pct=mn.diff/abs(NLCD.mn),
             sd.pct=sd.diff/NLCD.sd)
 out %>% group_by(LC) %>%
-  summarise(RMSE_nlcd=sqrt(mean( (NLCD2-GRANIT)^2, na.rm=T )),
+  summarise(RMSE_nlcd=sqrt(mean( (NLCD-GRANIT)^2, na.rm=T )),
             RMSE_mod=sqrt(mean( (Mean-GRANIT)^2, na.rm=T ))) %>%
   mutate(pct_diff=(RMSE_mod - RMSE_nlcd)/RMSE_nlcd*100)
 
