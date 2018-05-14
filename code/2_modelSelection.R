@@ -135,8 +135,20 @@ for(i in 1:length(v)) {
 }
 
 
-# munge output
+########
+## munge output
+########
+library(tidyverse); library(rstan)
 L.YZ <- read.csv("data/L_YZ.csv")
+opt.non <- c("ClimTopo_VS_nonspatial")
+opt.car <- c("CensClim_VS_spatial")
+opt <- c(opt.non, opt.car)
+vs.non <- read_stan_csv(list.files("out_stan", paste0("^", opt[1]), full.names=T))
+vs.car <- read_stan_csv(list.files("out_stan", paste0("^", opt[2]), full.names=T))
+eta.sum.non <- summary(vs.non, pars="eta")$summary[,c(1,4,8)]
+colnames(eta.sum.non) <- paste("non", c("mn", "025", "975"), sep="_")
+eta.sum.car <- summary(vs.car, pars="eta")$summary[,c(1,4,8)]
+colnames(eta.sum.car) <- paste("car", c("mn", "025", "975"), sep="_")
 comp.df <- L.YZ %>% gather(LC, grnt, 4:9) %>%
   mutate(nlcd=with(L.YZ, c(nlcd_Opn, nlcd_Oth, nlcd_Dec, nlcd_Mxd,
                            nlcd_Evg*(1-pWP/100), nlcd_Evg*pWP/100))) %>%
@@ -146,45 +158,28 @@ comp.df$LC <- factor(comp.df$LC,
                                    c("Opn", "Oth", "Dec", "WP", "Evg", "Mxd")),
                      labels=c("Opn", "Oth", "Dec", "WP", "Evg", "Mxd"))
 comp.df <- comp.df %>% arrange(desc(Fit), cellID, LC) %>% 
-  cbind(., do.call("cbind", eta.sum.non), do.call("cbind", eta.sum.car))
+  cbind(eta.sum.non, eta.sum.car)
+  # cbind(., do.call("cbind", eta.sum.non), do.call("cbind", eta.sum.car))
 comp.long <- comp.df %>% select(-contains("025")) %>% select(-contains("975")) %>%
-  gather(., model, mn, 17:30)  %>%
-  cbind(., rbind(do.call("rbind", eta.sum.non)[,2:3],
-                 do.call("rbind", eta.sum.car)[,2:3])) %>%
+  # gather(., model, mn, 17:30)  %>%
+  gather(., model, mn, 17:18) %>%
+  cbind(., rbind(eta.sum.non[,2:3], eta.sum.car[,2:3])) %>%
+    # cbind(., rbind(do.call("rbind", eta.sum.non)[,2:3],
+    #                do.call("rbind", eta.sum.car)[,2:3])) %>%
   mutate(Space=str_split_fixed(model, "_", 3)[,1],
          Cov=str_split_fixed(model, "_", 3)[,2]) %>%
-  rename(q025=non_Cens_025, q975=non_Cens_975)
+  rename(q025=non_025, q975=non_975)
+  # rename(q025=non_Cens_025, q975=non_Cens_975)
 comp.space <- comp.long  %>% select(-model) %>% spread(Space, mn)
 opt.long <- comp.long %>% filter(model %in% c("non_ClimTopo_mn", "car_CensClim_mn"))
 phi.df <- comp.long %>% filter(LC != "Mxd" & Space=="car") %>%
   mutate(phi=unlist(phi))
 
 
-# load full model for optimal models
-L <- read.csv("data/L_full.csv")
-opt <- paste0(str_split_fixed(c(opt.non, opt.car), "_", 3)[,2], 
-              c("_nonspatial", "_spatial"))
-full.non <- read_stan_csv(list.files("out_stan", paste0("^", opt[1]), full.names=T))
-full.car <- read_stan_csv(list.files("out_stan", paste0("^", opt[2]), full.names=T))
-full.df <- L %>% gather(LC, grnt, 4:9) %>%
-  mutate(nlcd=with(L, c(nlcd_Opn, nlcd_Oth, nlcd_Dec, nlcd_Mxd,
-                           nlcd_Evg*(1-pWP/100), nlcd_Evg*pWP/100))) %>%
-  select(-(4:8))
-full.df$LC <- factor(full.df$LC, 
-                     levels=paste0("grnt_", 
-                                   c("Opn", "Oth", "Dec", "WP", "Evg", "Mxd")),
-                     labels=c("Opn", "Oth", "Dec", "WP", "Evg", "Mxd"))
-full.df <- full.df %>% arrange(desc(Fit), cellID, LC) %>% 
-  mutate(non=c(get_posterior_mean(full.non, pars="eta")[,4]),
-         car=c(get_posterior_mean(full.car, pars="eta")[,4])) %>%
-  gather(Space, mn, 17:18) %>%
-  cbind(., rbind(summary(full.non, pars="eta")$summary[,c(4:8)],
-                 summary(full.car, pars="eta")$summary[,c(4:8)])) %>%
-  rename(q025="2.5%", q25="25%", q50="50%", q75="75%", q975="97.5%")
-write.csv(full.df, "out/3km_out.csv", row.names=F)
 
-
-
+########
+## plots
+########
 # maps of LC proportions
 prop.p <- ggplot(comp.df, aes(x=lon, y=lat)) + facet_wrap(~LC) + 
   scale_fill_gradient("", low="white", high="red", limits=c(0,1))
@@ -207,21 +202,6 @@ comp.p <- ggplot(comp.df, aes(x=lon, y=lat)) + facet_wrap(~LC) +
                        high="red", limits=c(-1,1))
 comp.p + geom_tile(aes(fill=non_ClimTopo_VS-grnt)) + ggtitle("No spatial random effects")
 comp.p + geom_tile(aes(fill=car_CensClim_VS-grnt)) + ggtitle("CAR")
-
-
-# table of RMSE
-opt.long %>%  
-# comp.long %>% 
-  filter(!Fit) %>%
-  group_by(Space, Cov, LC) %>% 
-  summarise(RMSE_nlcd=sqrt(mean( (nlcd - grnt)^2 )),
-            RMSE_mod=sqrt(mean( (mn - grnt)^2 ))) %>%
-  mutate(pct_diff=(RMSE_mod - RMSE_nlcd)/RMSE_nlcd*100)
-comp.long %>% filter(!Fit) %>% group_by(Space, Cov, LC) %>% 
-  summarise(mn_95int=mean(q975-q025)) %>%
-  ggplot(aes(x=Cov, y=mn_95int, colour=Space)) + geom_point() + 
-  facet_wrap(~LC) + ylim(0,1) + 
-  theme(axis.text.x=element_text(angle=300, hjust=0, vjust=1))
 
 
 # density of residuals
@@ -254,99 +234,57 @@ ggplot(phi.df, aes(x=lon, y=lat, fill=phi)) +
   scale_fill_gradient2(low="blue", mid="white", high="red", limits=c(-1,1))
 
 
+# table of RMSE
+opt.long %>%  filter(!Fit) %>% group_by(Space, Cov, LC) %>% 
+  summarise(RMSE_nlcd=sqrt(mean( (nlcd - grnt)^2 )),
+            RMSE_mod=sqrt(mean( (mn - grnt)^2 ))) %>%
+  mutate(pct_diff=(RMSE_mod - RMSE_nlcd)/RMSE_nlcd*100) %>%
+  write.csv("out/opt_vs_rmse.csv")
+comp.long %>% filter(!Fit) %>% group_by(Space, Cov, LC) %>% 
+  summarise(mn_95int=mean(q975-q025)) %>%
+  ggplot(aes(x=Cov, y=mn_95int, colour=Space)) + geom_point() + 
+  facet_wrap(~LC) + ylim(0,1) + 
+  theme(axis.text.x=element_text(angle=300, hjust=0, vjust=1))
 
-
-
-
-
-
-
-
-# old
-
-########
-## set up workspace
-########
-library(tidyverse); library(rstan)
-options(mc.cores=parallel::detectCores()); rstan_options(auto_write=TRUE)
-data_f <- "data/landscape_3km.csv"
-v <- str_remove(list.files("data_stan"), ".Rdump")
-m <- c("nonspatial", "spatial")
-
-L <- read.csv(data_f) %>% arrange(desc(Fit), cellID)
-comp.df <- L %>% gather(LC, grnt, 4:9) %>%
-  mutate(nlcd=with(L, c(nlcd_Opn, nlcd_Oth, nlcd_Dec, nlcd_Mxd,
-                        nlcd_Evg*(1-pWP/100), nlcd_Evg*pWP/100))) %>%
-  select(-(4:8))
-comp.df$LC <- factor(comp.df$LC, 
-                     levels=paste0("grnt_", 
-                                   c("Opn", "Oth", "Dec", "WP", "Evg", "Mxd")),
-                     labels=c("Opn", "Oth", "Dec", "WP", "Evg", "Mxd"))
-comp.df <- arrange(comp.df, cellID, LC)
-phi.df <- cbind(comp.df, 
-                matrix(ncol=length(v)*length(m), nrow=nrow(L), 
-                       dimnames=list(NULL, 
-                                     paste0(rep(v, each=2), "_", m, "_phi"))))
-phi.df <- filter(phi.df, LC != "WP")
-comp.df <- cbind(comp.df, 
-                 matrix(ncol=length(v)*length(m), nrow=nrow(L), 
-                        dimnames=list(NULL, paste0(rep(v, each=2), "_", m))))
 
 
 ########
-## run models
+## uncertainty
 ########
-n.chain <- 4
-n.iter <- 500
-for(j in 1:2) {
-  for(i in seq_along(v)) {
-    mod <- paste0(v[i], "_", m[j])
-    phi <- paste0(mod, "_phi")
-    # out <- stan(file=paste0("ms/", m[j], ".stan"),
-    #             data=read_rdump(paste0("data_stan/", v[i], ".Rdump")),
-    #             pars=c("nu", "Z_", "Z_new_"), include=F,
-    #             iter=n.iter, chains=n.chain,
-    #             sample_file=paste0("out_stan/", mod, ".csv"))
-    out <- read_stan_csv(list.files("out_stan", paste0("^", mod), full.names=T))
-    comp.df[[mod]] <- get_posterior_mean(out, pars="eta")[,n.chain+1]
-    if(m[j]=="spatial") {
-      phi.df[[phi]] <- get_posterior_mean(out, pars="phi")[,n.chain+1]
-    }
-  }
-}
+opt.non <- "ClimTopo_VS_nonspatial"
+opt.car <- "CensClim_VS_spatial"
+out.non <- read_stan_csv(list.files("out_stan", opt.non, full.names=T))
+out.car <- read_stan_csv(list.files("out_stan", opt.car, full.names=T))
 
-comp.long <- gather(comp.df, model, mn, 17:30) %>%
-  mutate(Cov=str_split_fixed(comp.long$model, "_", 2)[,1],
-         Space=str_split_fixed(comp.long$model, "_", 2)[,2])
-comp.sp <- select(comp.long, -model) %>%
-  spread(Space, mn)
-  
-ggplot(comp.sp, aes(x=lon, y=lat, fill=spatial)) + geom_tile() + 
-  facet_grid(LC~Cov) + ggtitle("CAR random effects") + 
-  scale_fill_gradient("Post. Mn", low="white", high="red", limits=c(0,1))
-ggplot(comp.sp, aes(x=lon, y=lat, fill=nonspatial)) + geom_tile() + 
-  facet_grid(LC~Cov) + ggtitle("No spatial random effects") + 
-  scale_fill_gradient("Post. Mn", low="white", high="red", limits=c(0,1))
-ggplot(comp.long, aes(x=lon, y=lat, fill=mn-nlcd)) + geom_tile() + 
-  facet_grid(LC~model) +
-  scale_fill_gradient2(low="blue", high="red", mid="white")
-ggplot(comp.long, aes(x=lon, y=lat, fill=mn-grnt)) + geom_tile() + 
-  facet_grid(LC~model) +
-  scale_fill_gradient2(low="blue", high="red", mid="white")
-ggplot(comp.sp, aes(x=lon, y=lat, fill=nonspatial-spatial)) + geom_tile() + 
-  facet_grid(LC~Cov) +
-  scale_fill_gradient2(low="blue", high="red", mid="white")
+eta.non <- rstan::extract(out.non, pars="eta")$eta
+eta.car <- rstan::extract(out.car, pars="eta")$eta
+Z_.non <- rstan::extract(out.non, pars="Z_")$Z_
+Z_.car <- rstan::extract(out.car, pars="Z_")$Z_
+Z_new_.non <- rstan::extract(out.non, pars="Z_new_")$Z_new_
+Z_new_.car <- rstan::extract(out.car, pars="Z_new_")$Z_new_
+phi.car <- rstan::extract(out.car, pars="phi")$phi
 
-comp.long %>% group_by(Cov, Space, LC) %>%
-  summarise(mn_grnt=mean(mn-grnt, na.rm=T),
-            mn_nlcd=mean(mn-nlcd))
-comp.sp %>% group_by(Cov, LC) %>%
-  summarise(car_grnt=mean(spatial-grnt, na.rm=T),
-            non_grnt=mean(nonspatial-grnt, na.rm=T),
-            car_nlcd=mean(spatial-nlcd, na.rm=T),
-            non_nlcd=mean(nonspatial-nlcd, na.rm=T)) %>%
-  mutate(car_non_grnt=(abs(car_grnt)-abs(non_grnt))/abs(non_grnt),
-         car_non_nlcd=(abs(car_nlcd)-abs(non_nlcd))/abs(non_grnt)) %>%
-  mutate_if(is.numeric, round, 3) %>%
-  print.AsIs
+
+samp.fit <- sample(1:1412, 16)
+samp.prd <- sample(1413:1662, 16)
+# samp.prd <- sample(1:250, 16)
+eta.fit <- data.frame(non=c(eta.non[,samp.fit,3]),
+                      car=c(eta.car[,samp.fit,3]),
+                      iter=rep(1:1500, times=length(samp.fit)),
+                      cell=rep(samp.fit, each=1500),
+                      Fit="Fit") %>%
+  gather(Space, eta, 1:2)
+eta.prd <- data.frame(non=c(eta.non[,samp.prd,3]),
+                      car=c(eta.car[,samp.prd,3]),
+                      iter=rep(1:1500, times=length(samp.prd)),
+                      cell=rep(samp.prd, each=1500),
+                      Fit="Pred") %>%
+  gather(Space, eta, 1:2)
+eta.df <- rbind(eta.fit, eta.prd)
+ggplot(eta.df, aes(x=eta, group=cell)) + geom_density() + xlim(0,1) +
+  facet_grid(Space~Fit, scales="free_y") 
+
+
+
+
 
