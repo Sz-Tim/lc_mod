@@ -1,3 +1,14 @@
+# This script produces the figures for the manuscript. It reads in a csv of the
+# model output at each resolution, combines them, and reshapes as needed. The
+# figures produced here are:
+# - FigPropMaps: Map of land cover proportions for each LC * estimate
+# - FigResidMaps: Map of residuals (x - GRANIT) for NLCD and models
+# - FigEtaZ: Density plot of abs(model - NLCD) for fitted vs predicted cells
+# - Fig95CI: Boxplots of 95% credible intervals for model output
+# - RMSE TABLE: RMSE (x : GRANIT) for fitted cells in full run
+# - SuppScatter: Scatter plot of x vs GRANIT
+
+
 library(tidyverse); theme_set(theme_bw())
 out.20a <- read.csv("out/20a_out.csv")
 out.20a$LC <- factor(out.20a$LC,
@@ -59,29 +70,34 @@ out.long$LC_full <- lvls_revalue(out.long$LC,
 out.long$LC_full <- lvls_reorder(out.long$LC_full, c(1,3,4,5,6,2))
 
 # Outline of Fit/Predict regions at 20 acre resolution
-coord.20 <- filter(out.20a, LC=="Opn" & Fit==0) %>% 
+coord.20 <- filter(out.20a, LC=="Opn") %>% 
   select(left, top, Fit) %>% 
   raster::rasterFromXYZ() %>% 
   raster::rasterToPolygons(dissolve=T) %>%
   fortify %>% select(long, lat, group) %>%
   rename(lon=long)
 coord.20.z <- coord.20.non <- coord.20
+coord.20.y <- filter(coord.20, group %in% c("2.1", "2.2", "2.3"))
 coord.20.z$Estimate <- "Z^s~~'20 ac'"
 coord.20.non$Estimate <- "bar(eta)[Non]~~'20 ac'"
+coord.20.y$Estimate <- "Y~~'20 ac'"
 
 # Outline of Fit/Predict regions at 9 km2 resolution
-coord.9 <- filter(out.9km, LC=="Opn" & Fit==0 & Space=="non") %>% 
+coord.9 <- filter(out.9km, LC=="Opn" & Space=="non") %>% 
   select(lon, lat, Fit) %>% 
   raster::rasterFromXYZ() %>% 
   raster::rasterToPolygons(dissolve=T) %>%
   fortify %>% select(long, lat, group) %>%
   rename(lon=long)
 coord.9.z <- coord.9.non <- coord.9.car <- coord.9
+coord.9.y <- filter(coord.9, group == "2.1")
 coord.9.z$Estimate <- "Z^s~~'9 km'^2"
 coord.9.non$Estimate <- "bar(eta)[Non]~~'9 km'^2"
 coord.9.car$Estimate <- "bar(eta)[CAR]~~'9 km'^2"
+coord.9.y$Estimate <- "Y~~'9 km'^2"
 
-max.coord <- rbind(coord.20.z, coord.20.non, coord.9.z, coord.9.non, coord.9.car)
+max.coord <- rbind(coord.20.y, coord.20.z, coord.20.non, 
+                   coord.9.y, coord.9.z, coord.9.non, coord.9.car)
 max.coord$Estimate <- factor(max.coord$Estimate, levels=levels(out.long$Estimate))
 
 
@@ -94,6 +110,8 @@ gg_fonts <- theme(axis.title=element_text(size=12),
                   plot.title=element_text(size=12))
 fit.col <- c(Fit="#40004b", Predict="#1b7837")
 fit.fill <- c(Fit="#762a83", Predict="#5aae61")
+coord.col <- c(fit.col[2], fit.fill[1])[as.numeric(substr(levels(max.coord$group),1,1))]
+names(coord.col) <- levels(max.coord$group)
 
 
 
@@ -108,8 +126,11 @@ mn.all <- ggplot(out.long, aes(x=lon, y=lat, fill=prop)) + theme_bw() +
   geom_raster(data=filter(out.long, Estimate=="Y~~'9 km'^2")) +
   geom_raster(data=filter(out.long, Estimate=="bar(eta)[Non]~~'9 km'^2")) +
   geom_raster(data=filter(out.long, Estimate=="bar(eta)[CAR]~~'9 km'^2")) +
-  geom_path(data=max.coord, inherit.aes=F, aes(x=lon, y=lat, group=group), 
-            colour="gray20", size=0.25) + 
+  # geom_path(data=max.coord, inherit.aes=F, aes(x=lon, y=lat, group=group), 
+  #           colour="gray20", size=0.25) + 
+  geom_path(data=max.coord, inherit.aes=F, size=0.4,
+            aes(x=lon, y=lat, group=group, colour=group)) + 
+  scale_colour_manual(values=coord.col, guide="none") +
   scale_fill_gradient2("Proportion Cover", na.value=NA, midpoint=0.5,
                        low="#fff7fb", mid="#74a9cf", high="#023858", 
                       limits=c(0,1), breaks=c(0, 0.5, 1), guide="colourbar") +
