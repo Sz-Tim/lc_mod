@@ -66,7 +66,7 @@ mn.all <- ggplot(out.long, aes(x=lon, y=lat, fill=prop)) + theme_bw() +
              labeller=labeller(LC_full=label_value, Estimate=label_parsed)) + 
   theme(axis.text=element_blank()) +
   labs(x="Easting", y="Northing")
-ggsave("figs/FigPropMaps.jpeg", mn.all, height=9, width=12)
+ggsave("ms/figs/FigPropMaps.jpeg", mn.all, height=9, width=12)
 
 
 
@@ -87,7 +87,7 @@ resid.all <- ggplot(droplevels(filter(out.long,
              labeller=labeller(LC_full=label_value, Estimate=label_parsed)) + 
   theme(axis.text=element_blank()) +
   labs(x="Easting", y="Northing")
-ggsave("figs/FigResidMaps.jpeg", resid.all, height=9, width=9)
+ggsave("ms/figs/FigResidMaps.jpeg", resid.all, height=9, width=9)
 
 
 
@@ -110,7 +110,7 @@ box.nlcd <- ggplot(out.all, aes(x=Model, y=abs(mn-nlcd), fill=Fit)) +
   labs(y=expression(abs(bar(eta)-Z[s]))) + ylim(0,1) +
   guides(fill=guide_legend(reverse=TRUE)) +
   coord_flip() + theme_bw() + theme(legend.position=c(.825,.95))
-ggsave("figs/FigEtaZ.jpg", box.nlcd, width=4, height=9)
+ggsave("ms/figs/FigEtaZ.jpg", box.nlcd, width=4, height=9)
 
 
 
@@ -124,7 +124,7 @@ ci.95 <- ggplot(out.all, aes(x=Model, y=q975-q025, fill=Fit)) +
   scale_x_discrete("", labels=parse(text=levels(out.all$Model))) +
   labs(x="", y="95% CI") + guides(fill=guide_legend(reverse=TRUE)) +
   coord_flip() + theme_bw() + theme(legend.position=c(.825,.95))
-ggsave("figs/FigCI95.jpg", ci.95, width=4, height=9)
+ggsave("ms/figs/FigCI95.jpg", ci.95, width=4, height=9)
 
 
 
@@ -149,6 +149,6 @@ RMSE.20a <- out.20a %>% filter(Fit==1) %>%
   mutate(pct_diff=(RMSE_mod - RMSE_nlcd)/RMSE_nlcd*100,
          Model="eta[Non]: fine")
 
-write_csv(rbind(RMSE.3km, RMSE.20a), "figs/SuppFullRMSE.csv")
+write_csv(rbind(RMSE.3km, RMSE.20a), "ms/figs/SuppFullRMSE.csv")
 
 
