@@ -1,5 +1,7 @@
 functions {
   //sparse CAR prior for spatial random effects
+  //implemented following: 
+  //<mc-stan.org/users/documentation/case-studies/mbjoseph-CARStan.html>
   real sparse_car_lpdf(vector phi, real tau, real alpha, 
     int[,] W_sp, vector dist_sp, vector lambda, int n, int W_n) {
       row_vector[n] phit_dist; // phi' * dist
@@ -19,6 +21,7 @@ functions {
   }
   
   //GJAM transformation to enforce compositional restrictions
+  //implemented following Clark et al. 2017
   vector tr_gjam_inv(vector nu_i, int D, int d) {
     vector[D] eta_i;
     vector[d] nu_i_p_;
@@ -55,8 +58,8 @@ data {
   int n_t;  //number of covariates (theta) for p
   vector<lower=0, upper=1>[D-1] Y[n1];  //Y proportions
   matrix<lower=0, upper=1>[n3,D-2] Z;  //Z proportions
-  matrix[n1,n_t] X;  //covariates: fitting
-  matrix[n3-n1,n_t] X_new;  //covariates: predicting
+  matrix[n1,n_t] X;  //covariates: fitting; [,1] = WhitePineDistribution
+  matrix[n3-n1,n_t] X_new;  //covariates: prediction
   matrix<lower=0, upper=1>[n3,n3] W;  //adjacency matrix
   int W_n;  // number of adjacent pairs
 }
@@ -112,7 +115,7 @@ parameters {
 
 transformed parameters {
   matrix[d,d] Sigma[2];  //covariance
-  vector[d] Z_[n1];  //Z split & unbiased  
+  vector[d] Z_[n1];  //Z split & unbiased = Z' in text 
   vector[tot_b] beta_qr = beta_z * beta_scale;  //implies beta ~ N(0,scale)
   
   for(k in 1:2) Sigma[k] = diag_pre_multiply(L_sigma[k], L_Omega[k]);
@@ -148,8 +151,8 @@ model {
 
 generated quantities {
   vector[n1] log_lik;  //log likelihood for model comparison
-  simplex[D] eta[n3];  //gjam transformed nu
-  vector[d] Z_new_[n3-n1];  //unbiased, split Z
+  simplex[D] eta[n3];  //compositional constraints: transformed nu
+  vector[d] Z_new_[n3-n1];  //unbiased, split Z = Z' in text
   vector[n_t] theta = R_inv * theta_qr;
   vector[tot_b] beta;
   for(j in 1:(d-1)) {
