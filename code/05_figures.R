@@ -25,8 +25,8 @@ out.all <- data.frame(lat=c(out.9km$lat, out.20a$top),
                                 labels=levels(out.9km$LC)),
                       grnt=c(out.9km$grnt, out.20a$GRANIT),
                       nlcd=c(out.9km$nlcd, out.20a$NLCD),
-                      Model=rep(c("eta[Non]: 9km^2", "eta[CAR]: 9km^2", 
-                                  "eta[Non]: 20ac"),
+                      Model=rep(c("eta[Non]: 900 ha", "eta[CAR]: 900 ha", 
+                                  "eta[Non]: 8.1 ha"),
                                 times=c(rep(nrow(out.9km)/2,2), nrow(out.20a))),
                       Res=rep(c("coarse", "fine"), 
                               times=c(nrow(out.9km), nrow(out.20a))),
@@ -42,20 +42,20 @@ out.all$LC_full <- lvls_revalue(out.all$LC,
 out.all$LC_full <- lvls_reorder(out.all$LC_full, c(1,3,4,5,6,2))
 out.all$Model <- lvls_reorder(out.all$Model, c(1,3,2))
 out.all$Mod_parse <- lvls_revalue(out.all$Model, 
-                                  c("CAR~~'9 km'^2",
-                                    "Non~~'9 km'^2",
-                                    "Non~~'20 ac'"))
+                                  c("CAR:'900 ha'",
+                                    "Non:'900 ha'",
+                                    "Non:'8.1 ha'"))
 out.long <- data.frame(lat=c(rep(out.9km$lat,2), rep(out.20a$top,3)),
                        lon=c(rep(out.9km$lon,2), rep(out.20a$left,3)),
                        LC=factor(c(rep(out.9km$LC,2), rep(out.20a$LC,3)),
                                  labels=levels(out.9km$LC)),
-                       Estimate=rep(c("bar(eta)[Non]~~'9 km'^2", 
-                                      "bar(eta)[CAR]~~'9 km'^2", 
-                                      "Y~~'9 km'^2", 
-                                      "Z^s~~'9 km'^2",
-                                      "bar(eta)[Non]~~'20 ac'", 
-                                      "Y~~'20 ac'", 
-                                      "Z^s~~'20 ac'"),
+                       Estimate=rep(c("bar(eta)[Non]:'900 ha'", 
+                                      "bar(eta)[CAR]:'900 ha'", 
+                                      "Y:'900 ha'", 
+                                      "Z^s:'900 ha'",
+                                      "bar(eta)[Non]:'8.1 ha'", 
+                                      "Y:'8.1 ha'", 
+                                      "Z^s:'8.1 ha'"),
                                     times=c(rep(nrow(out.9km)/2,4), 
                                             rep(nrow(out.20a),3))),
                        prop=c(out.9km$mn, out.9km$grnt[out.9km$Space=="non"],
@@ -78,9 +78,9 @@ coord.20 <- filter(out.20a, LC=="Opn") %>%
   rename(lon=long)
 coord.20.z <- coord.20.non <- coord.20
 coord.20.y <- filter(coord.20, group %in% c("2.1", "2.2", "2.3"))
-coord.20.z$Estimate <- "Z^s~~'20 ac'"
-coord.20.non$Estimate <- "bar(eta)[Non]~~'20 ac'"
-coord.20.y$Estimate <- "Y~~'20 ac'"
+coord.20.z$Estimate <- "Z^s:'8.1 ha'"
+coord.20.non$Estimate <- "bar(eta)[Non]:'8.1 ha'"
+coord.20.y$Estimate <- "Y:'8.1 ha'"
 
 # Outline of Fit/Predict regions at 9 km2 resolution
 coord.9 <- filter(out.9km, LC=="Opn" & Space=="non") %>% 
@@ -91,23 +91,23 @@ coord.9 <- filter(out.9km, LC=="Opn" & Space=="non") %>%
   rename(lon=long)
 coord.9.z <- coord.9.non <- coord.9.car <- coord.9
 coord.9.y <- filter(coord.9, group == "2.1")
-coord.9.z$Estimate <- "Z^s~~'9 km'^2"
-coord.9.non$Estimate <- "bar(eta)[Non]~~'9 km'^2"
-coord.9.car$Estimate <- "bar(eta)[CAR]~~'9 km'^2"
-coord.9.y$Estimate <- "Y~~'9 km'^2"
+coord.9.z$Estimate <- "Z^s:'900 ha'"
+coord.9.non$Estimate <- "bar(eta)[Non]:'900 ha'"
+coord.9.car$Estimate <- "bar(eta)[CAR]:'900 ha'"
+coord.9.y$Estimate <- "Y:'900 ha'"
 
 max.coord <- rbind(coord.20.y, coord.20.z, coord.20.non, 
                    coord.9.y, coord.9.z, coord.9.non, coord.9.car)
 max.coord$Estimate <- factor(max.coord$Estimate, levels=levels(out.long$Estimate))
 
 
-gg_fonts <- theme(axis.title=element_text(size=12),
-                  axis.text=element_text(size=10, colour="gray20"),
-                  legend.title=element_text(size=10),
-                  legend.text=element_text(size=9),
+gg_fonts <- theme(axis.title=element_text(size=11),
+                  axis.text=element_text(size=9, colour="gray20"),
+                  legend.title=element_text(size=9),
+                  legend.text=element_text(size=8),
                   panel.grid.minor=element_blank(),
-                  strip.text=element_text(size=10),
-                  plot.title=element_text(size=12))
+                  strip.text=element_text(size=9),
+                  plot.title=element_text(size=11))
 fit.col <- c(Fit="#40004b", Predict="#1b7837")
 fit.fill <- c(Fit="#762a83", Predict="#5aae61")
 coord.col <- c(fit.col[2], fit.fill[1])[as.numeric(substr(levels(max.coord$group),1,1))]
@@ -119,15 +119,13 @@ names(coord.col) <- levels(max.coord$group)
 ## FigPropMaps
 ########
 mn.all <- ggplot(out.long, aes(x=lon, y=lat, fill=prop)) + theme_bw() + 
-  geom_raster(data=filter(out.long, Estimate=="Z^s~~'20 ac'")) +
-  geom_raster(data=filter(out.long, Estimate=="Y~~'20 ac'")) +
-  geom_raster(data=filter(out.long, Estimate=="bar(eta)[Non]~~'20 ac'")) +
-  geom_raster(data=filter(out.long, Estimate=="Z^s~~'9 km'^2")) +
-  geom_raster(data=filter(out.long, Estimate=="Y~~'9 km'^2")) +
-  geom_raster(data=filter(out.long, Estimate=="bar(eta)[Non]~~'9 km'^2")) +
-  geom_raster(data=filter(out.long, Estimate=="bar(eta)[CAR]~~'9 km'^2")) +
-  # geom_path(data=max.coord, inherit.aes=F, aes(x=lon, y=lat, group=group), 
-  #           colour="gray20", size=0.25) + 
+  geom_raster(data=filter(out.long, Estimate=="Z^s:'8.1 ha'")) +
+  geom_raster(data=filter(out.long, Estimate=="Y:'8.1 ha'")) +
+  geom_raster(data=filter(out.long, Estimate=="bar(eta)[Non]:'8.1 ha'")) +
+  geom_raster(data=filter(out.long, Estimate=="Z^s:'900 ha'")) +
+  geom_raster(data=filter(out.long, Estimate=="Y:'900 ha'")) +
+  geom_raster(data=filter(out.long, Estimate=="bar(eta)[Non]:'900 ha'")) +
+  geom_raster(data=filter(out.long, Estimate=="bar(eta)[CAR]:'900 ha'")) +
   geom_path(data=max.coord, inherit.aes=F, size=0.4,
             aes(x=lon, y=lat, group=group, colour=group)) + 
   scale_colour_manual(values=coord.col, guide="none") +
@@ -165,13 +163,13 @@ ggsave("ms/figs/FigPropMaps.jpeg", mn.all, height=7, width=6,
 ## FigResidMaps
 ########
 resid.all <- ggplot(droplevels(filter(out.long, 
-                                      !Estimate %in% c("Y~~'20 ac'", "Y~~'9 km'^2"))), 
+                                      !Estimate %in% c("Y:'8.1 ha'", "Y:'900 ha'"))), 
                     aes(x=lon, y=lat, fill=prop-Y)) + theme_bw() +
-  geom_raster(data=filter(out.long, Estimate=="Z^s~~'20 ac'")) +
-  geom_raster(data=filter(out.long, Estimate=="bar(eta)[Non]~~'20 ac'")) +
-  geom_raster(data=filter(out.long, Estimate=="Z^s~~'9 km'^2")) +
-  geom_raster(data=filter(out.long, Estimate=="bar(eta)[Non]~~'9 km'^2")) +
-  geom_raster(data=filter(out.long, Estimate=="bar(eta)[CAR]~~'9 km'^2")) +
+  geom_raster(data=filter(out.long, Estimate=="Z^s:'8.1 ha'")) +
+  geom_raster(data=filter(out.long, Estimate=="bar(eta)[Non]:'8.1 ha'")) +
+  geom_raster(data=filter(out.long, Estimate=="Z^s:'900 ha'")) +
+  geom_raster(data=filter(out.long, Estimate=="bar(eta)[Non]:'900 ha'")) +
+  geom_raster(data=filter(out.long, Estimate=="bar(eta)[CAR]:'900 ha'")) +
   scale_fill_gradient2("Estimate - Y", low="#313695", mid="white", na.value=NA,
                        high="#a50026", limits=c(-1,1), breaks=c(-1, 0, 1), 
                        guide="colourbar") +
@@ -241,8 +239,8 @@ ci.95 <- ggplot(out.all, aes(x=fct_rev(Model), y=q975-q025,
   facet_grid(.~LC_full, labeller=label_wrap_gen(width=11)) +
   geom_boxplot(outlier.alpha=0.1, outlier.size=0.1, alpha=0.5) + 
   geom_hline(yintercept=0, colour="gray30", size=0.25) +
-  scale_x_discrete("", labels=parse(text=c("Non~~'20 ac'",
-  "Non~~'9 km'^2", "CAR~~'9 km'^2"))) +
+  scale_x_discrete("", labels=parse(text=c("Non:'8.1 ha'",
+  "Non:'900 ha'", "CAR:'900 ha'"))) +
   labs(x="", y=expression(eta~~"(95% CI)")) + 
   scale_colour_manual("", values=fit.col) +
   scale_fill_manual("", values=fit.fill) +
@@ -283,10 +281,10 @@ write_csv(rbind(RMSE.9km, RMSE.20a), "ms/figs/SuppFullRMSE.csv")
 ########
 ## Y vs Z: Scatter plots
 ########
-out.all$GrdRes <- lvls_revalue(out.all$Res, c("'9 km'^2", "'20 ac'"))
+out.all$GrdRes <- lvls_revalue(out.all$Res, c("'900 ha'", "'8.1 ha'"))
 scat.YZ <- ggplot(out.all, aes(x=nlcd, y=grnt)) + 
-  geom_point(data=filter(out.all, Model == "eta[Non]: 9km^2"), alpha=0.1) + 
-  geom_point(data=filter(out.all, Model == "eta[Non]: 20ac"), alpha=0.01) +
+  geom_point(data=filter(out.all, Model == "eta[Non]: 900 ha"), alpha=0.1) + 
+  geom_point(data=filter(out.all, Model == "eta[Non]: 8.1 ha"), alpha=0.01) +
   geom_abline(colour="red", linetype=2) +
   facet_grid(GrdRes~LC_full, labeller=labeller(LC_full=label_wrap_gen(width=11), 
                                               GrdRes=label_parsed)) + 
@@ -299,17 +297,17 @@ scat.YZ <- ggplot(out.all, aes(x=nlcd, y=grnt)) +
 ggsave("ms/supp/SuppScatter.jpeg", scat.YZ, height=2.75, width=6)
 
 scat.Y_all <- ggplot(droplevels(filter(out.long, 
-                         !Estimate %in% c("Y~~'20 ac'", "Y~~'9 km'^2"))), 
+                         !Estimate %in% c("Y:'8.1 ha'", "Y:'900 ha'"))), 
        aes(x=prop, y=Y)) + theme_bw() +
-  geom_point(data=filter(out.long, Estimate=="Z^s~~'20 ac'"), 
+  geom_point(data=filter(out.long, Estimate=="Z^s:'8.1 ha'"), 
              alpha=0.01) +
-  geom_point(data=filter(out.long, Estimate=="bar(eta)[Non]~~'20 ac'"), 
+  geom_point(data=filter(out.long, Estimate=="bar(eta)[Non]:'8.1 ha'"), 
              alpha=0.01) +
-  geom_point(data=filter(out.long, Estimate=="Z^s~~'9 km'^2"), 
+  geom_point(data=filter(out.long, Estimate=="Z^s:'900 ha'"), 
              alpha=0.1) +
-  geom_point(data=filter(out.long, Estimate=="bar(eta)[Non]~~'9 km'^2"), 
+  geom_point(data=filter(out.long, Estimate=="bar(eta)[Non]:'900 ha'"), 
              alpha=0.1) +
-  geom_point(data=filter(out.long, Estimate=="bar(eta)[CAR]~~'9 km'^2"), 
+  geom_point(data=filter(out.long, Estimate=="bar(eta)[CAR]:'900 ha'"), 
              alpha=0.1) +
   geom_abline(colour="red", linetype=2) +
   facet_grid(Estimate~LC_full, 
@@ -325,9 +323,9 @@ ggsave("ms/supp/SuppScatter_all.jpeg", scat.Y_all, height=5, width=6)
 
 dens.YZ <- ggplot(out.all, aes(x=nlcd-grnt)) + 
   geom_vline(xintercept=0, linetype=3) +
-  geom_density(data=filter(out.all, Model == "eta[Non]: 9km^2"), 
+  geom_density(data=filter(out.all, Model == "eta[Non]: 900 ha"), 
                colour="black") +
-  geom_density(data=filter(out.all, Model == "eta[Non]: 20ac"), 
+  geom_density(data=filter(out.all, Model == "eta[Non]: 8.1 ha"), 
                colour="gray40") + 
   facet_wrap(~LC_full) + xlim(-1,1) + 
   labs(x=expression(Z[s]-Y))
