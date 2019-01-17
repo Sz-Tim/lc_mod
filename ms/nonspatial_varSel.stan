@@ -49,8 +49,9 @@ data {
   int nX;  //number of delta covariates for each LC
   int di[2*(K-2)];  //beta indexes identifying each LC
   int nV;  //number of rho covariates
-  vector<lower=0, upper=1>[K-1] Y[n1];  //Y proportions
+  vector<lower=0, upper=1>[K-1] Y[n1];  //Y proportions: training
   matrix<lower=0, upper=1>[n3,K-2] Z;  //Z proportions
+  vector[K] new_Y[n3-n1];  //Y proportions: testing
   matrix[n1,nV] V;  //covariates: fitting
   matrix[n3-n1,nV] new_V;  //covariates: predicting
 }
@@ -126,11 +127,13 @@ model {
 
 
 generated quantities {
+  vector[n3-n1] log_lik;  //log likelihood for model comparison
   vector[k] new_PSI_[n3-n1]; //latent, unconstrained for predictions
-  simplex[K] PSI[n3];  //gjam transformed PSI_
+  simplex[K] PSI[n3];  //transformed, compositional PSI_ 
   vector[k] new_Z_[n3-n1];  //unbiased, split Z for cells without Y
   vector[nV] theta = R_inv * theta_qr; //theta on natural scale -- reverse QR decomposition
   vector[tot_b] beta; //beta on natural scale -- reverse QR decomposition
+  vector[K] PSI_Y_error[n3-n1];  //prediction error for testing set
   
   for(j in 1:(k-1)) {
     beta[di[j+j-1]:di[j+j]] = R_inv[1:nX,1:nX] * beta_qr[di[j+j-1]:di[j+j]];
@@ -152,10 +155,12 @@ generated quantities {
   
   //calculate PSI from PSI' for cells with Y and Z
   for(n in 1:n1) PSI[n] = tr_gjam_inv(PSI_[n], K, k);
-    
+  
   //calculate PSI from PSI' for cells without Y
   for(n in n2:n3) {
     new_PSI_[n-n1] = multi_normal_cholesky_rng(new_Z_[n-n1], Sigma[2]);
     PSI[n] = tr_gjam_inv(new_PSI_[n-n1], K, k);
+    PSI_Y_error[n-n1] = PSI[n] - new_Y[n-n1];
+    log_lik[n-n1] = multi_normal_cholesky_lpdf(new_Y[n-n1][1:k] | new_PSI_[n-n1], Sigma[1]);
   }
 }
