@@ -1,290 +1,220 @@
-# This script runs the variable selection version of the nonspatial and spatial
-# models. Chains run in parallel if `options(mc.cores=parallel::detectCores())`
-# is run first, with one chain on each available core. If you have excess cores
-# (e.g., on a cluster), set n.core > 1.
+
+
+
 
 ########
-## setup
+## Run variable selection models
 ########
-n.core <- 2  # for running *models* in parallel in addition to chains
+# set parameters
+res <- c("200ha", "2000ha")[2]
+n.core <- 4  # for running *models* in parallel in addition to chains
 n.chain <- 2
-n.iter <- 10
-n.thin <- 10
+n.iter <- 1000
+n.thin <- 1
 n.refr <- 50
-exclude <- c("nu", "Z_", "Z_new_")
+exclude <- c("PSI_", "Z_", "Z_new_")
+
 # load workspace
-library(stringr)
-v <- str_remove(list.files("data_stan", "_VS"), ".Rdump")
+library(tidyverse)
+v <- str_remove(list.files("data_stan", paste0(res, "_varSel")), ".Rdump")
 
-
-########
-## run models
-########
-if(n.core > 1) {  # run models in parallel
-  library(doSNOW); p.c <- makeCluster(n.core); registerDoSNOW(p.c)
-  foreach(i=seq_along(v)) %dopar% {
-    library(rstan)
-    options(mc.cores=parallel::detectCores()); rstan_options(auto_write=TRUE)
-    mod <- paste0(v[i], "_nonspatial_vs")
-    out <- stan(file="R/nonspatial_vs.stan",
-                data=read_rdump(paste0("data_stan/", v[i], ".Rdump")),
-                iter=n.iter, chains=n.chain, refresh=n.refr, thin=n.thin,
-                pars=exclude, include=F,
-                sample_file=paste0("out_stan/", mod, ".csv"))
-  }
-  foreach(i=seq_along(v)) %dopar% {
-    library(rstan)
-    options(mc.cores=parallel::detectCores()); rstan_options(auto_write=TRUE)
-    mod <- paste0(v[i], "_spatial_vs")
-    out <- stan(file="R/spatial_vs.stan",
-                data=read_rdump(paste0("data_stan/", v[i], ".Rdump")),
-                iter=n.iter, chains=n.chain, refresh=n.refr, thin=n.thin,
-                pars=exclude, include=F,
-                sample_file=paste0("out_stan/", mod, ".csv"))
-  }
-  stopCluster(p.c)
-} else {  # run models in serial
-  library(rstan)
+# run models
+library(doSNOW)
+p.c <- makeCluster(n.core); registerDoSNOW(p.c)
+foreach(i=seq_along(v), .packages="rstan") %dopar% {
   options(mc.cores=parallel::detectCores()); rstan_options(auto_write=TRUE)
-  for(i in seq_along(v)) {
-    mod <- paste0(v[i], "_nonspatial_vs")
-    out <- stan(file="R/nonspatial_vs.stan",
-                data=read_rdump(paste0("data_stan/", v[i], ".Rdump")),
-                iter=n.iter, chains=n.chain, refresh=n.refr, thin=n.thin,
-                pars=exclude, include=F,
-                sample_file=paste0("out_stan/", mod, ".csv"))
-  }
-  for(i in seq_along(v)) {
-    mod <- paste0(v[i], "_spatial_vs")
-    out <- stan(file="R/spatial_vs.stan",
-                data=read_rdump(paste0("data_stan/", v[i], ".Rdump")),
-                iter=n.iter, chains=n.chain, refresh=n.refr, thin=n.thin,
-                pars=exclude, include=F,
-                sample_file=paste0("out_stan/", mod, ".csv"))
-  }
+  # nonspatial model
+  mod <- paste0(v[i], "_nonspatial_varSel")
+  out <- stan(file="ms/nonspatial_varSel.stan",
+              data=read_rdump(paste0("data_stan/", v[i], ".Rdump")),
+              iter=n.iter, chains=n.chain, refresh=n.refr, thin=n.thin,
+              pars=exclude, include=F,
+              sample_file=paste0("out_stan/", mod, ".csv"))
+  
+  # spatial model
+  mod <- paste0(v[i], "_spatial_varSel")
+  out <- stan(file="ms/nonspatial_varSel.stan",
+              data=read_rdump(paste0("data_stan/", v[i], ".Rdump")),
+              iter=n.iter, chains=n.chain, refresh=n.refr, thin=n.thin,
+              pars=exclude, include=F,
+              sample_file=paste0("out_stan/", mod, ".csv"))
 }
+stopCluster(p.c)
+
+
+
+
 
 
 ########
-## compare lppd
+## Calculate lppd
 ########
-library(rarhsmm); library(tidyverse); library(rstan)
+# setup workspace
+library(tidyverse); library(rstan)
+v <- str_remove(list.files("data_stan", paste0(res, "_varSel")), ".Rdump")
 
-# storage structures
-lpd.non <- lpd.car <- eta.sum.non <- eta.sum.car <- phi <- vector("list", length(v))
-names(lpd.non) <- names(eta.sum.non) <- paste0("non_", v)
-names(lpd.car) <- names(eta.sum.car) <- names(phi) <- paste0("car_", v)
+lpd.non <- PSI.sum.non <- setNames(vector("list", length(v)), paste0("non", v))
+lpd.car <- PSI.sum.car <- setNames(vector("list", length(v)), paste0("car", v))
+
 for(i in seq_along(v)) {
-  non <- paste0(v[i], "_nonspatial_vs")
-  car <- paste0(v[i], "_spatial_vs")
   stan_d <- read_rdump(paste0("data_stan/", v[i], ".Rdump"))
-  Y_new <- stan_d$Y_new
+  non.f <- paste0(v[i], "_nonspatial_varSel")
+  car.f <- paste0(v[i], "_spatial_varSel")
   
   # load output
-  out.non <- read_stan_csv(list.files("out_stan", paste0("^", non), full.names=T))
-  out.car <- read_stan_csv(list.files("out_stan", paste0("^", car), full.names=T))
+  out.non <- read_stan_csv(list.files("out_stan", paste0("^", non.f), full.names=T))
+  out.car <- read_stan_csv(list.files("out_stan", paste0("^", car.f), full.names=T))
   
-  # extract predictions, covariate matrices
-  eta.non <- rstan::extract(out.non, pars="eta")$eta[,stan_d$n2:stan_d$n3,-stan_d$D]
-  eta.car <- rstan::extract(out.car, pars="eta")$eta[,stan_d$n2:stan_d$n3,-stan_d$D]
-  Sigma.non <- rstan::extract(out.non, pars="Sigma")$Sigma[,2,,]
-  Sigma.car <- rstan::extract(out.car, pars="Sigma")$Sigma[,2,,]
-  n.j <- dim(eta.non)[1]
-  n.cell <- dim(eta.non)[2]
+  # extract pointwise predictive density
+  lppd.non <- rstan::extract(out.non, pars="log_lik")$log_lik
+  lpd.non[[i]] <- -sum(colMeans(lppd.non))/(ncol(lppd.non))
+  lppd.car <- rstan::extract(out.car, pars="log_lik")$log_lik
+  lpd.car[[i]] <- -sum(colMeans(lppd.car))/(ncol(lppd.car))
   
-  # calculate pointwise predective density
-  lppd.non <- lppd.car <- matrix(0, nrow=n.j, ncol=n.cell)
-  for(j in 1:n.j) {
-    lppd.non[j,] <- sapply(1:n.cell, function(k) 
-      mvdnorm(rbind(eta.non[j,k,]), Y_new[k,], Sigma.non[j,,], logd=F))
-    lppd.car[j,] <- sapply(1:n.cell, function(k) 
-      mvdnorm(rbind(eta.car[j,k,]), Y_new[k,], Sigma.car[j,,], logd=F))
-  }
-  
-  # calculate log predictive density
-  lpd.non[[i]] <- -sum(log(apply(lppd.non, 2, mean)))/prod(dim(Y_new[,-6]))
-  lpd.car[[i]] <- -sum(log(apply(lppd.car, 2, mean)))/prod(dim(Y_new[,-6]))
-
   # extract eta summaries
-  eta.sum.non[[i]] <- summary(out.non, pars="eta")$summary[,c(1,4,8)]
-  colnames(eta.sum.non[[i]]) <- paste("non", 
-                                      str_split_fixed(v[i], "_", 2)[,1],
-                                      c("mn", "025", "975"), sep="_")
-  eta.sum.car[[i]] <- summary(out.car, pars="eta")$summary[,c(1,4,8)]
-  colnames(eta.sum.car[[i]]) <- paste("car", 
-                                      str_split_fixed(v[i], "_", 2)[,1],
-                                      c("mn", "025", "975"), sep="_")
-  
-  # extract spatial random effects
-  phi[[i]] <- c(get_posterior_mean(out.car, pars="phi")[,4])
+  PSI.sum.non[[i]] <- summary(out.non, pars="PSI")$summary[,c(1,4,8)]
+  PSI.sum.car[[i]] <- summary(out.car, pars="PSI")$summary[,c(1,4,8)]
+  colnames(PSI.sum.non[[i]]) <- colnames(PSI.sum.car[[i]]) <- paste0("PSI_", 
+                                                        c("mn", "025", "975"))
 }
 
 sort(unlist(lpd.non))  # ClimTopo, but models are very similar
-sort(unlist(lpd.car))  # CensClim, but models are very similar
+sort(unlist(lpd.car))  # ClimTopo, but models are very similar
 
 opt.non <- names(sort(unlist(lpd.non)))[1]
 opt.car <- names(sort(unlist(lpd.car)))[1]
 
-for(i in 1:length(v)) {
-  colnames(eta.sum.non[[i]]) <- paste("non", 
-                                      str_split_fixed(v[i], "_", 2)[,1],
-                                      c("mn", "025", "975"), sep="_")
-  colnames(eta.sum.car[[i]]) <- paste("car", 
-                                      str_split_fixed(v[i], "_", 2)[,1],
-                                      c("mn", "025", "975"), sep="_")
-}
-
-
-########
-## munge output
-########
-library(tidyverse); library(rstan)
-L.YZ <- read.csv("data/L_YZ.csv")
-opt.non <- c("ClimTopo_VS_nonspatial")
-opt.car <- c("CensClim_VS_spatial")
-opt <- c(opt.non, opt.car)
-vs.non <- read_stan_csv(list.files("out_stan", paste0("^", opt[1]), full.names=T))
-vs.car <- read_stan_csv(list.files("out_stan", paste0("^", opt[2]), full.names=T))
-eta.sum.non <- summary(vs.non, pars="eta")$summary[,c(1,4,8)]
-colnames(eta.sum.non) <- paste("non", c("mn", "025", "975"), sep="_")
-eta.sum.car <- summary(vs.car, pars="eta")$summary[,c(1,4,8)]
-colnames(eta.sum.car) <- paste("car", c("mn", "025", "975"), sep="_")
-comp.df <- L.YZ %>% gather(LC, grnt, 4:9) %>%
-  mutate(nlcd=with(L.YZ, c(nlcd_Opn, nlcd_Oth, nlcd_Dec, nlcd_Mxd,
-                           nlcd_Evg*(1-pWP/100), nlcd_Evg*pWP/100))) %>%
-  select(-(4:8))
-comp.df$LC <- factor(comp.df$LC, 
-                     levels=paste0("grnt_", 
-                                   c("Opn", "Oth", "Dec", "WP", "Evg", "Mxd")),
-                     labels=c("Opn", "Oth", "Dec", "WP", "Evg", "Mxd"))
-comp.df <- comp.df %>% arrange(desc(Fit), cellID, LC) %>% 
-  cbind(eta.sum.non, eta.sum.car)
-  # cbind(., do.call("cbind", eta.sum.non), do.call("cbind", eta.sum.car))
-comp.long <- comp.df %>% select(-contains("025")) %>% select(-contains("975")) %>%
-  # gather(., model, mn, 17:30)  %>%
-  gather(., model, mn, 17:18) %>%
-  cbind(., rbind(eta.sum.non[,2:3], eta.sum.car[,2:3])) %>%
-    # cbind(., rbind(do.call("rbind", eta.sum.non)[,2:3],
-    #                do.call("rbind", eta.sum.car)[,2:3])) %>%
-  mutate(Space=str_split_fixed(model, "_", 3)[,1],
-         Cov=str_split_fixed(model, "_", 3)[,2]) %>%
-  rename(q025=non_025, q975=non_975)
-  # rename(q025=non_Cens_025, q975=non_Cens_975)
-comp.space <- comp.long  %>% select(-model) %>% spread(Space, mn)
-opt.long <- comp.long %>% filter(model %in% c("non_ClimTopo_mn", "car_CensClim_mn"))
-phi.df <- comp.long %>% filter(LC != "Mxd" & Space=="car") %>%
-  mutate(phi=unlist(phi))
 
 
 
 ########
-## plots
+## Visualize
 ########
-# maps of LC proportions
-prop.p <- ggplot(comp.df, aes(x=lon, y=lat)) + facet_wrap(~LC) + 
-  scale_fill_gradient("", low="white", high="red", limits=c(0,1))
-prop.p + geom_tile(aes(fill=grnt)) + ggtitle("GRANIT")
-prop.p + geom_tile(aes(fill=nlcd)) + ggtitle("NLCD")
-prop.p + geom_tile(aes(fill=Fit)) + scale_fill_manual(values=c("gray", "blue"))
-prop.p + geom_tile(aes(fill=non_ClimTopo_mn)) + 
-  ggtitle("Nonspatial optimal model mean")
-prop.p + geom_tile(aes(fill=non_ClimTopo_975-non_ClimTopo_025)) + 
-  ggtitle("Nonspatial optimal model 95% range")
-prop.p + geom_tile(aes(fill=car_CensClim_mn)) +
-  ggtitle("CAR optimal model mean")
-prop.p + geom_tile(aes(fill=car_CensClim_975-car_CensClim_025)) +
-  ggtitle("CAR optimal model 95% range")
+grnt.df <- read.csv("data/L_varSel_2000ha.csv") %>% 
+  select(lon, lat, Train, CellID, grnt_Opn, grnt_Oth, grnt_Dec,
+         grnt_WP, grnt_Evg, grnt_Mxd) %>% 
+  gather(LC, grnt, 5:10) %>% 
+  arrange(CellID)
+psi.df <- tibble(CellID=rep(grnt.df$CellID, 14),
+                 lon=rep(grnt.df$lon, 14),
+                 lat=rep(grnt.df$lat, 14),
+                 Train=rep(grnt.df$Train, 14),
+                 LC=rep(c("Opn", "Oth", "Dec", "WP", "Evg", "Mxd"), nrow(grnt.df)/6*14),
+                 model=rep(str_split_fixed(v, "_", 2)[,1], each=nrow(grnt.df)),
+                 grnt=rep(grnt.df$grnt, 14),
+                 PSI.non=unlist(map(PSI.sum.non, ~.[,1])),
+                 PSI.non.lo=unlist(map(PSI.sum.non, ~.[,2])),
+                 PSI.non.hi=unlist(map(PSI.sum.non, ~.[,3])),
+                 PSI.non.CI=PSI.non.hi-PSI.non.lo,
+                 PSI.car=unlist(map(PSI.sum.car, ~.[,1])),
+                 PSI.car.lo=unlist(map(PSI.sum.car, ~.[,2])),
+                 PSI.car.hi=unlist(map(PSI.sum.car, ~.[,3])),
+                 PSI.car.CI=PSI.car.hi-PSI.car.lo) %>% 
+  group_by(model, CellID) %>% 
+  mutate(PSI.non=PSI.non/sum(PSI.non),
+         PSI.car=PSI.car/sum(PSI.car))
+write.csv(psi.df, paste0("out/psi_df_", res, ".csv"))
+  
+
+library(viridis)
+ggplot(psi.df) + geom_tile(aes(lon, lat, fill=PSI)) + facet_grid(LC~model) + 
+  scale_fill_viridis(limits=c(0,1))
+ggplot(filter(psi.df, !Train)) + 
+  geom_tile(aes(lon, lat, fill=PSI.car.CI)) + facet_grid(LC~model) + 
+  scale_fill_viridis(limits=c(0,1))
+ggplot(filter(psi.df, !Train)) + 
+  geom_tile(aes(lon, lat, fill=PSI.car-grnt)) + facet_grid(LC~model) + 
+  scale_fill_gradient2(limits=c(-1,1))
+ggplot(filter(psi.df, !Train)) + geom_density(aes(x=PSI.car-grnt, colour=model)) + 
+  facet_wrap(~LC) + scale_colour_viridis(discrete=TRUE)
+ggplot(filter(psi.df, !Train)) + 
+  geom_density(aes(x=PSI.car.CI), colour="black") +
+  geom_density(aes(x=PSI.non.CI), colour="red") +
+  facet_grid(LC~model, scales="free")
 
 
-# maps of residuals
-comp.p <- ggplot(comp.df, aes(x=lon, y=lat)) + facet_wrap(~LC) + 
-  scale_fill_gradient2("Residual\nerror", low="blue", mid="white",
-                       high="red", limits=c(-1,1))
-comp.p + geom_tile(aes(fill=non_ClimTopo_VS-grnt)) + ggtitle("No spatial random effects")
-comp.p + geom_tile(aes(fill=car_CensClim_VS-grnt)) + ggtitle("CAR")
+psi.df %>% filter(!Train) %>% group_by(model) %>% 
+  summarise(mnDiff.non=mean(PSI.non-grnt),
+            mnDiff.car=mean(PSI.car-grnt),
+            sumDiff.non=sum(abs(PSI.non-grnt)),
+            sumDiff.car=sum(abs(PSI.car-grnt))) %>% 
+  arrange(sumDiff.car)
 
-
-# density of residuals
-ggplot(filter(comp.long, !Fit), aes(x=mn-grnt, colour=Space)) + 
-  geom_vline(xintercept=0, linetype=3) + geom_density() + facet_grid(Cov~LC) +
-  xlim(-.5,.5) + ggtitle("OOS prediction error")
-ggplot(filter(comp.long, Space=="car" & !Fit), aes(x=mn-grnt, colour=Cov)) + 
-  geom_vline(xintercept=0, linetype=3) + geom_density() + facet_wrap(~LC) +
-  xlim(-.5,.5) + ggtitle("CAR: OOS prediction error")
-ggplot(filter(comp.long, Space=="non" & !Fit), aes(x=mn-grnt, colour=Cov)) + 
-  geom_vline(xintercept=0, linetype=3) + geom_density() + facet_wrap(~LC) +
-  xlim(-.5,.5) + ggtitle("No spatial random effects: OOS prediction error")
-
-
-# biplot of grnt, mean
-ggplot(filter(comp.long, !Fit), aes(y=mn, x=grnt, colour=Space)) + 
-  geom_abline() + geom_point(alpha=.25) + geom_rug(alpha=0.2) +
-  facet_grid(LC~Cov) + xlim(0,1) + ylim(0,1) +
-  labs(x="GRANIT", y="Posterior mean")
-ggplot(filter(comp.long, !Fit), aes(y=mn, x=grnt, colour=Space)) + 
-  geom_abline() + geom_density2d() + geom_rug(alpha=0.2) +
-  stat_smooth(se=F, method="loess") + 
-  facet_grid(LC~Cov) + xlim(0,1) + ylim(0,1) +
-  labs(x="GRANIT", y="Posterior mean")
-
-
-# map of spatial random effects
-ggplot(phi.df, aes(x=lon, y=lat, fill=phi)) +
-  geom_tile() + facet_grid(LC~Cov) + 
-  scale_fill_gradient2(low="blue", mid="white", high="red", limits=c(-1,1))
-
-
-# table of RMSE
-opt.long %>%  filter(!Fit) %>% group_by(Space, Cov, LC) %>% 
-  summarise(RMSE_nlcd=sqrt(mean( (nlcd - grnt)^2 )),
-            RMSE_mod=sqrt(mean( (mn - grnt)^2 ))) %>%
-  mutate(pct_diff=(RMSE_mod - RMSE_nlcd)/RMSE_nlcd*100) %>%
-  write.csv("out/opt_vs_rmse.csv")
-comp.long %>% filter(!Fit) %>% group_by(Space, Cov, LC) %>% 
-  summarise(mn_95int=mean(q975-q025)) %>%
-  ggplot(aes(x=Cov, y=mn_95int, colour=Space)) + geom_point() + 
-  facet_wrap(~LC) + ylim(0,1) + 
-  theme(axis.text.x=element_text(angle=300, hjust=0, vjust=1))
-
-
-
-########
-## uncertainty
-########
-opt.non <- "ClimTopo_VS_nonspatial"
-opt.car <- "CensClim_VS_spatial"
-out.non <- read_stan_csv(list.files("out_stan", opt.non, full.names=T))
-out.car <- read_stan_csv(list.files("out_stan", opt.car, full.names=T))
-
-eta.non <- rstan::extract(out.non, pars="eta")$eta
-eta.car <- rstan::extract(out.car, pars="eta")$eta
-Z_.non <- rstan::extract(out.non, pars="Z_")$Z_
-Z_.car <- rstan::extract(out.car, pars="Z_")$Z_
-Z_new_.non <- rstan::extract(out.non, pars="Z_new_")$Z_new_
-Z_new_.car <- rstan::extract(out.car, pars="Z_new_")$Z_new_
-phi.car <- rstan::extract(out.car, pars="phi")$phi
-
-
-samp.fit <- sample(1:1412, 16)
-samp.prd <- sample(1413:1662, 16)
-# samp.prd <- sample(1:250, 16)
-eta.fit <- data.frame(non=c(eta.non[,samp.fit,3]),
-                      car=c(eta.car[,samp.fit,3]),
-                      iter=rep(1:1500, times=length(samp.fit)),
-                      cell=rep(samp.fit, each=1500),
-                      Fit="Fit") %>%
-  gather(Space, eta, 1:2)
-eta.prd <- data.frame(non=c(eta.non[,samp.prd,3]),
-                      car=c(eta.car[,samp.prd,3]),
-                      iter=rep(1:1500, times=length(samp.prd)),
-                      cell=rep(samp.prd, each=1500),
-                      Fit="Pred") %>%
-  gather(Space, eta, 1:2)
-eta.df <- rbind(eta.fit, eta.prd)
-ggplot(eta.df, aes(x=eta, group=cell)) + geom_density() + xlim(0,1) +
-  facet_grid(Space~Fit, scales="free_y") 
+ggplot(psi.df) + geom_tile(aes(lon, lat, fill=PSI.non)) + facet_wrap(~LC) +
+  scale_fill_viridis(limits=c(0,1))
+ggplot(psi.df) + geom_tile(aes(lon, lat, fill=PSI.CI)) + facet_wrap(~LC) +
+  scale_fill_viridis()
+ggplot(psi.df) + geom_tile(aes(lon, lat, fill=PSI-grnt)) + facet_wrap(~LC) +
+  scale_fill_gradient2(limits=c(-1,1))
 
 
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+library(rstan); library(tidyverse); library(viridis)
+out <- stan(file="ms/nonspatial.stan",
+            data=read_rdump(paste0("data_stan/Cens_2000ha_varSel.Rdump")),
+            iter=1000, chains=1, refresh=10)
+
+psi.df <- read.csv("data/L_varSel_2000ha.csv") %>% 
+  select(lon, lat, Train, CellID, grnt_Opn, grnt_Oth, grnt_Dec, grnt_WP, grnt_Evg, grnt_Mxd) %>% 
+  gather(LC, grnt, 5:10) %>% 
+  arrange(CellID) %>% 
+  mutate(psi=c(get_posterior_mean(out, pars="PSI")[,1]),
+         psi_025=summary(out, pars="PSI")$summary[,4],
+         psi_975=summary(out, pars="PSI")$summary[,8],
+         psi_CI=psi_975-psi_025)
+
+psiError.df <- read.csv("data/L_varSel_2000ha.csv") %>% 
+  select(lon, lat, Train, CellID, grnt_Opn, grnt_Oth, grnt_Dec, grnt_WP, grnt_Evg, grnt_Mxd) %>% 
+  filter(!Train) %>% 
+  gather(LC, grnt, 5:10) %>% 
+  arrange(CellID) %>% 
+  mutate(error=c(get_posterior_mean(out, pars="PSI_Y_error")[,3]))
+
+phi.df <- read.csv("data/L_varSel_2000ha.csv") %>% 
+  select(lon, lat, Train, CellID, grnt_Opn, grnt_Oth, grnt_Dec, grnt_WP, grnt_Evg) %>% 
+  # filter(Train) %>% 
+  gather(LC, grnt, 5:9) %>% 
+  arrange(CellID) %>% 
+  mutate(phi=c(get_posterior_mean(out, pars="phi")[,1]),
+         phi_025=summary(out, pars="phi")$summary[,4],
+         phi_975=summary(out, pars="phi")$summary[,8],
+         phi_CI=phi_975-phi_025)
+
+phiNew.df <- read.csv("data/L_varSel_2000ha.csv") %>% 
+  select(lon, lat, Train, CellID, grnt_Opn, grnt_Oth, grnt_Dec, grnt_WP, grnt_Evg) %>% 
+  # filter(!Train) %>% 
+  gather(LC, grnt, 5:9) %>% 
+  arrange(CellID) %>% 
+  mutate(phi=c(get_posterior_mean(out, pars="new_phi")[,1]),
+         phi_025=summary(out, pars="new_phi")$summary[,4],
+         phi_975=summary(out, pars="new_phi")$summary[,8],
+         phi_CI=phi_975-phi_025)
+phi.df <- rbind(phi.df, phiNew.df)
+
+ggplot(psi.df) + geom_tile(aes(lon, lat, fill=psi)) + facet_wrap(~LC) + 
+  scale_fill_viridis(limits=c(0,1))
+ggplot(psi.df) + geom_tile(aes(lon, lat, fill=psi_CI)) + facet_wrap(~LC) + 
+  scale_fill_viridis(limits=c(0,1))
+
+ggplot(phi.df) + geom_tile(aes(lon, lat, fill=phi)) + facet_wrap(~LC)
+ggplot(phi.df) + geom_tile(aes(lon, lat, fill=phi_CI)) + facet_wrap(~LC)
+
+ggplot(phiNew.df) + geom_tile(aes(lon, lat, fill=phi)) + facet_wrap(~LC)
+ggplot(phiNew.df) + geom_tile(aes(lon, lat, fill=phi_CI)) + facet_wrap(~LC)
+
+
+ggplot(psi.df) + geom_tile(aes(lon, lat, fill=error)) + 
+  scale_fill_gradient2(limits=c(-1,1)) + facet_wrap(~LC)
