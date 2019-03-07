@@ -50,7 +50,7 @@ library(doSNOW)
 ## Calculate lppd
 ########
 # setup workspace
-library(tidyverse); library(rstan)
+library(tidyverse); library(rstan); library(loo)
 v <- str_remove(list.files("data_stan", paste0(res, "_varSel")), ".Rdump")
 grnt.df <- read.csv(paste0("data/L_varSel_", res, ".csv")) %>%
   select(lon, lat, Train, CellID, grnt_Opn, grnt_Oth, grnt_Dec,
@@ -58,8 +58,10 @@ grnt.df <- read.csv(paste0("data/L_varSel_", res, ".csv")) %>%
   gather(LC, grnt, 5:10) %>%
   arrange(CellID)
 
-lpd.non <- PSI.sum.non <- setNames(vector("list", length(v)), paste0("non", v))
-lpd.car <- PSI.sum.car <- setNames(vector("list", length(v)), paste0("car", v))
+lpd.non <- PSI.sum.non <- waic.non <- setNames(vector("list", length(v)), 
+                                               paste0("non", v))
+lpd.car <- PSI.sum.car <- waic.car <- setNames(vector("list", length(v)), 
+                                               paste0("car", v))
 
 for(i in seq_along(v)) {
   stan_d <- read_rdump(paste0("data_stan/", v[i], ".Rdump"))
@@ -71,18 +73,31 @@ for(i in seq_along(v)) {
   out.car <- read_stan_csv(list.files("out_stan", paste0("^", car.f), full.names=T))
   
   # extract pointwise predictive density
-  lppd.non <- rstan::extract(out.non, pars="log_lik")$log_lik
-  lpd.non[[i]] <- -sum(colMeans(lppd.non))/(ncol(lppd.non))
-  lppd.car <- rstan::extract(out.car, pars="log_lik")$log_lik
-  lpd.car[[i]] <- -sum(colMeans(lppd.car))/(ncol(lppd.car))
+  lppd.non <- extract_log_lik(out.non)
+  lpd.non[[i]] <- -sum(colMeans(exp(lppd.non)))/(ncol(lppd.non))
+  waic.non[[i]] <- waic(lppd.non[[i]])
+  lppd.car <- extract_log_lik(out.car)
+  lpd.car[[i]] <- -sum(colMeans(exp(lppd.car)))/(ncol(lppd.car))
+  waic.car[[i]] <- waic(lppd.car[[i]])
   
   # extract eta summaries
   PSI.sum.non[[i]] <- summary(out.non, pars="PSI")$summary[,c(1,4,8)]
   PSI.sum.car[[i]] <- summary(out.car, pars="PSI")$summary[,c(1,4,8)]
   colnames(PSI.sum.non[[i]]) <- colnames(PSI.sum.car[[i]]) <- paste0("PSI_", 
                                                         c("mn", "025", "975"))
-  cat("Finished", i, "of", length(v), "\n")
+  cat("\n\nFinished", i, "of", length(v), "\n")
+  waic.non[[i]]
+  lpd.non[[i]]
+  waic.car[[i]]
+  lpd.car[[i]]
 }
+
+saveRDS(waic.non, paste0("out/waic_non_", res, ".rds"))
+saveRDS(waic.car, paste0("out/waic_car_", res, ".rds"))
+saveRDS(lppd.non, paste0("out/lppd_non_", res, ".rds"))
+saveRDS(lppd.car, paste0("out/lppd_car_", res, ".rds"))
+saveRDS(lpd.non, paste0("out/lpd_non_", res, ".rds"))
+saveRDS(lpd.car, paste0("out/lpd_car_", res, ".rds"))
 
 sort(unlist(lpd.non))  # ClimTopo, but models are very similar
 sort(unlist(lpd.car))  # ClimTopo, but models are very similar
@@ -121,40 +136,54 @@ psi.df <- tibble(CellID=rep(grnt.df$CellID, 14),
 write.csv(psi.df, paste0("out/psi_df_", res, ".csv"))
 
 
-# library(viridis)
-# ggplot(psi.df) + geom_tile(aes(lon, lat, fill=PSI)) + facet_grid(LC~model) + 
+# library(viridis); theme_set(theme_bw())
+# psi.df <- read.csv(paste0("out/psi_df_", res, ".csv"))
+# ggplot(psi.df) + geom_tile(aes(lon, lat, fill=PSI.car)) + facet_grid(LC~model) +
 #   scale_fill_viridis(limits=c(0,1))
-# ggplot(filter(psi.df, !Train)) + 
-#   geom_tile(aes(lon, lat, fill=PSI.car.CI)) + facet_grid(LC~model) + 
+# ggplot(filter(psi.df, !Train)) +
+#   geom_tile(aes(lon, lat, fill=PSI.car.CI)) + facet_grid(LC~model) +
 #   scale_fill_viridis(limits=c(0,1))
-# ggplot(filter(psi.df, !Train)) + 
-#   geom_tile(aes(lon, lat, fill=PSI.car-grnt)) + facet_grid(LC~model) + 
+# ggplot(filter(psi.df, !Train)) +
+#   geom_tile(aes(lon, lat, fill=PSI.non-grnt)) + facet_grid(LC~model) +
 #   scale_fill_gradient2(limits=c(-1,1))
-# ggplot(filter(psi.df, !Train)) + geom_density(aes(x=PSI.car-grnt, colour=model)) + 
+# ggplot(filter(psi.df, !Train)) + geom_density(aes(x=PSI.car-grnt, colour=model)) +
 #   facet_wrap(~LC) + scale_colour_viridis(discrete=TRUE)
-# ggplot(filter(psi.df, !Train)) + 
+# ggplot(filter(psi.df, !Train)) +
 #   geom_density(aes(x=PSI.car.CI), colour="black") +
 #   geom_density(aes(x=PSI.non.CI), colour="red") +
 #   facet_grid(LC~model, scales="free")
 # 
+# ggplot(filter(psi.df, !Train)) + xlim(0,1) + ylim(-1,1) +
+#   geom_point(aes(x=grnt, y=PSI.non-grnt), colour="red", alpha=0.2, shape=1) +
+#   geom_point(aes(x=grnt, y=PSI.car-grnt), colour="black", alpha=0.2, shape=1) +
+#   geom_hline(yintercept=0, linetype=3) +
+#   facet_grid(LC~model) + labs(x="GRANIT", y="PSI-GRANIT")
+# ggplot(filter(psi.df, !Train)) + xlim(0,1) + ylim(0,1) +
+#   geom_point(aes(x=grnt, y=PSI.non), colour="red", alpha=0.2, shape=1) +
+#   geom_point(aes(x=grnt, y=PSI.car), colour="black", alpha=0.2, shape=1) +
+#   geom_abline(linetype=3) + 
+#   facet_grid(LC~model) + labs(x="GRANIT", y="PSI")
 # 
-# psi.df %>% filter(!Train) %>% group_by(model) %>% 
-#   summarise(mnDiff.non=mean(PSI.non-grnt),
-#             mnDiff.car=mean(PSI.car-grnt),
+# 
+# psi.df %>% filter(!Train) %>% group_by(model) %>%
+#   summarise(mnDiff.non=mean(abs(PSI.non-grnt)),
+#             mnDiff.car=mean(abs(PSI.car-grnt)),
+#             mdDiff.non=median(abs(PSI.non-grnt)),
+#             mdDiff.car=median(abs(PSI.car-grnt)),
 #             sumDiff.non=sum(abs(PSI.non-grnt)),
-#             sumDiff.car=sum(abs(PSI.car-grnt))) %>% 
+#             sumDiff.car=sum(abs(PSI.car-grnt))) %>%
 #   arrange(sumDiff.car)
-# 
-# ggplot(psi.df) + geom_tile(aes(lon, lat, fill=PSI.non)) + facet_wrap(~LC) +
+
+# ggplot(psi.df) + geom_tile(aes(lon, lat, fill=PSI.car)) + facet_wrap(~LC) +
 #   scale_fill_viridis(limits=c(0,1))
 # ggplot(psi.df) + geom_tile(aes(lon, lat, fill=PSI.CI)) + facet_wrap(~LC) +
 #   scale_fill_viridis()
-# ggplot(psi.df) + geom_tile(aes(lon, lat, fill=PSI-grnt)) + facet_wrap(~LC) +
+# ggplot(psi.df) + geom_tile(aes(lon, lat, fill=PSI.car-grnt)) + facet_wrap(~LC) +
 #   scale_fill_gradient2(limits=c(-1,1))
-# 
-# 
-# 
-# 
+#
+#
+#
+#
 # 
 # 
 # 
