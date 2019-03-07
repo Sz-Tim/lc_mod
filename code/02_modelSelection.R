@@ -74,11 +74,9 @@ for(i in seq_along(v)) {
   
   # extract pointwise predictive density
   lppd.non <- extract_log_lik(out.non)
-  lpd.non[[i]] <- -sum(colMeans(exp(lppd.non)))/(ncol(lppd.non))
-  waic.non[[i]] <- waic(lppd.non[[i]])
+  lpd.non[[i]] <- sum(colMeans(exp(lppd.non)))/(ncol(lppd.non))
   lppd.car <- extract_log_lik(out.car)
-  lpd.car[[i]] <- -sum(colMeans(exp(lppd.car)))/(ncol(lppd.car))
-  waic.car[[i]] <- waic(lppd.car[[i]])
+  lpd.car[[i]] <- sum(colMeans(exp(lppd.car)))/(ncol(lppd.car))
   
   # extract eta summaries
   PSI.sum.non[[i]] <- summary(out.non, pars="PSI")$summary[,c(1,4,8)]
@@ -86,14 +84,10 @@ for(i in seq_along(v)) {
   colnames(PSI.sum.non[[i]]) <- colnames(PSI.sum.car[[i]]) <- paste0("PSI_", 
                                                         c("mn", "025", "975"))
   cat("\n\nFinished", i, "of", length(v), "\n")
-  waic.non[[i]]
   lpd.non[[i]]
-  waic.car[[i]]
   lpd.car[[i]]
 }
 
-saveRDS(waic.non, paste0("out/waic_non_", res, ".rds"))
-saveRDS(waic.car, paste0("out/waic_car_", res, ".rds"))
 saveRDS(lppd.non, paste0("out/lppd_non_", res, ".rds"))
 saveRDS(lppd.car, paste0("out/lppd_car_", res, ".rds"))
 saveRDS(lpd.non, paste0("out/lpd_non_", res, ".rds"))
