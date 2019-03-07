@@ -19,7 +19,7 @@ res <- c("200ha", "2000ha")[2]
 # v <- str_remove(list.files("data_stan", paste0(res, "_varSel")), ".Rdump")
 
 # run models
-library(doSNOW)
+# library(doSNOW)
 # p.c <- makeCluster(n.core); registerDoSNOW(p.c)
 # foreach(i=seq_along(v), .packages="rstan") %dopar% {
 #   options(mc.cores=parallel::detectCores()); rstan_options(auto_write=TRUE)
@@ -50,7 +50,7 @@ library(doSNOW)
 ## Calculate lppd
 ########
 # setup workspace
-library(tidyverse); library(rstan); library(loo)
+library(tidyverse); library(rstan); library(rarhsmm)
 v <- str_remove(list.files("data_stan", paste0(res, "_varSel")), ".Rdump")
 grnt.df <- read.csv(paste0("data/L_varSel_", res, ".csv")) %>%
   select(lon, lat, Train, CellID, grnt_Opn, grnt_Oth, grnt_Dec,
@@ -58,34 +58,54 @@ grnt.df <- read.csv(paste0("data/L_varSel_", res, ".csv")) %>%
   gather(LC, grnt, 5:10) %>%
   arrange(CellID)
 
-lpd.non <- PSI.sum.non <- waic.non <- setNames(vector("list", length(v)), 
-                                               paste0("non", v))
-lpd.car <- PSI.sum.car <- waic.car <- setNames(vector("list", length(v)), 
-                                               paste0("car", v))
+lpd.non <- PSI.sum.non <- lpd.LL.non <- setNames(vector("list", length(v)), 
+                                                 paste0("non", v))
+lpd.car <- PSI.sum.car <- lpd.LL.car <- setNames(vector("list", length(v)), 
+                                                 paste0("car", v))
 
 for(i in seq_along(v)) {
   stan_d <- read_rdump(paste0("data_stan/", v[i], ".Rdump"))
   non.f <- paste0(v[i], "_nonspatial_varSel")
   car.f <- paste0(v[i], "_spatial_varSel")
+  Y_new <- stan_d$new_Y[,-stan_d$K]
   
   # load output
   out.non <- read_stan_csv(list.files("out_stan", paste0("^", non.f), full.names=T))
   out.car <- read_stan_csv(list.files("out_stan", paste0("^", car.f), full.names=T))
   
-  # extract pointwise predictive density
-  lppd.non <- extract_log_lik(out.non)
-  lpd.non[[i]] <- sum(colMeans(exp(lppd.non)))/(ncol(lppd.non))
-  lppd.car <- extract_log_lik(out.car)
-  lpd.car[[i]] <- sum(colMeans(exp(lppd.car)))/(ncol(lppd.car))
+  # extract values from stan output
+  Sigma.non <- rstan::extract(out.non, pars="Sigma")$Sigma[,1,,]
+  non.id <- which(Sigma.non[,1,1]!=0)
+  Sigma.non <- Sigma.non[non.id,,]
+  Sigma.car <- rstan::extract(out.car, pars="Sigma")$Sigma[,1,,]
+  car.id <- which(Sigma.car[,1,1]!=0)
+  Sigma.car <- Sigma.car[car.id,,]
+  psi.non <- rstan::extract(out.non, pars="PSI")$PSI[non.id,stan_d$n2:stan_d$n3,-stan_d$K]
+  psi.car <- rstan::extract(out.car, pars="PSI")$PSI[car.id,stan_d$n2:stan_d$n3,-stan_d$K]
+  n.j <- dim(psi.non)[1]
+  n.cell <- dim(psi.non)[2]
   
-  # extract eta summaries
+  # calculate pointwise predective density
+  lppd.non <- lppd.car <- matrix(0, nrow=n.j, ncol=n.cell)
+  for(j in 1:n.j) {
+    lppd.non[j,] <- sapply(1:n.cell, function(k) 
+      mvdnorm(rbind(Y_new[k,]), psi.non[j,k,], Sigma.non[j,,], logd=F))
+    lppd.car[j,] <- sapply(1:n.cell, function(k) 
+      mvdnorm(rbind(Y_new[k,]), psi.car[j,k,], Sigma.car[j,,], logd=F))
+  }
+  
+  # calculate log predictive density
+  lpd.non[[i]] <- sum(log(apply(lppd.non, 2, mean)))/prod(dim(Y_new))
+  lpd.car[[i]] <- sum(log(apply(lppd.car, 2, mean)))/prod(dim(Y_new))
+  
+  # extract psi summaries
   PSI.sum.non[[i]] <- summary(out.non, pars="PSI")$summary[,c(1,4,8)]
   PSI.sum.car[[i]] <- summary(out.car, pars="PSI")$summary[,c(1,4,8)]
   colnames(PSI.sum.non[[i]]) <- colnames(PSI.sum.car[[i]]) <- paste0("PSI_", 
                                                         c("mn", "025", "975"))
-  cat("\n\nFinished", i, "of", length(v), "\n")
-  lpd.non[[i]]
-  lpd.car[[i]]
+  cat("Finished", i, "of", length(v), "\n")
+  cat("  lpd.non:", lpd.non[[i]])
+  cat("  lpd.car:", lpd.car[[i]])
 }
 
 saveRDS(lppd.non, paste0("out/lppd_non_", res, ".rds"))
@@ -130,43 +150,43 @@ psi.df <- tibble(CellID=rep(grnt.df$CellID, 14),
 write.csv(psi.df, paste0("out/psi_df_", res, ".csv"))
 
 
-# library(viridis); theme_set(theme_bw())
-# psi.df <- read.csv(paste0("out/psi_df_", res, ".csv"))
-# ggplot(psi.df) + geom_tile(aes(lon, lat, fill=PSI.car)) + facet_grid(LC~model) +
-#   scale_fill_viridis(limits=c(0,1))
-# ggplot(filter(psi.df, !Train)) +
-#   geom_tile(aes(lon, lat, fill=PSI.car.CI)) + facet_grid(LC~model) +
-#   scale_fill_viridis(limits=c(0,1))
-# ggplot(filter(psi.df, !Train)) +
-#   geom_tile(aes(lon, lat, fill=PSI.non-grnt)) + facet_grid(LC~model) +
-#   scale_fill_gradient2(limits=c(-1,1))
-# ggplot(filter(psi.df, !Train)) + geom_density(aes(x=PSI.car-grnt, colour=model)) +
-#   facet_wrap(~LC) + scale_colour_viridis(discrete=TRUE)
-# ggplot(filter(psi.df, !Train)) +
-#   geom_density(aes(x=PSI.car.CI), colour="black") +
-#   geom_density(aes(x=PSI.non.CI), colour="red") +
-#   facet_grid(LC~model, scales="free")
-# 
-# ggplot(filter(psi.df, !Train)) + xlim(0,1) + ylim(-1,1) +
-#   geom_point(aes(x=grnt, y=PSI.non-grnt), colour="red", alpha=0.2, shape=1) +
-#   geom_point(aes(x=grnt, y=PSI.car-grnt), colour="black", alpha=0.2, shape=1) +
-#   geom_hline(yintercept=0, linetype=3) +
-#   facet_grid(LC~model) + labs(x="GRANIT", y="PSI-GRANIT")
-# ggplot(filter(psi.df, !Train)) + xlim(0,1) + ylim(0,1) +
-#   geom_point(aes(x=grnt, y=PSI.non), colour="red", alpha=0.2, shape=1) +
-#   geom_point(aes(x=grnt, y=PSI.car), colour="black", alpha=0.2, shape=1) +
-#   geom_abline(linetype=3) + 
-#   facet_grid(LC~model) + labs(x="GRANIT", y="PSI")
-# 
-# 
-# psi.df %>% filter(!Train) %>% group_by(model) %>%
-#   summarise(mnDiff.non=mean(abs(PSI.non-grnt)),
-#             mnDiff.car=mean(abs(PSI.car-grnt)),
-#             mdDiff.non=median(abs(PSI.non-grnt)),
-#             mdDiff.car=median(abs(PSI.car-grnt)),
-#             sumDiff.non=sum(abs(PSI.non-grnt)),
-#             sumDiff.car=sum(abs(PSI.car-grnt))) %>%
-#   arrange(sumDiff.car)
+library(viridis); theme_set(theme_bw())
+psi.df <- read.csv(paste0("out/psi_df_", res, ".csv"))
+ggplot(psi.df) + geom_tile(aes(lon, lat, fill=PSI.car)) + facet_grid(LC~model) +
+  scale_fill_viridis(limits=c(0,1))
+ggplot(filter(psi.df, !Train)) +
+  geom_tile(aes(lon, lat, fill=PSI.car.CI)) + facet_grid(LC~model) +
+  scale_fill_viridis(limits=c(0,1))
+ggplot(filter(psi.df, !Train)) +
+  geom_tile(aes(lon, lat, fill=PSI.non-grnt)) + facet_grid(LC~model) +
+  scale_fill_gradient2(limits=c(-1,1))
+ggplot(filter(psi.df, !Train)) + geom_density(aes(x=PSI.car-grnt, colour=model)) +
+  facet_wrap(~LC) + scale_colour_viridis(discrete=TRUE)
+ggplot(filter(psi.df, !Train)) +
+  geom_density(aes(x=PSI.car.CI), colour="black") +
+  geom_density(aes(x=PSI.non.CI), colour="red") +
+  facet_grid(LC~model, scales="free")
+
+ggplot(filter(psi.df, !Train)) + xlim(0,1) + ylim(-1,1) +
+  geom_point(aes(x=grnt, y=PSI.non-grnt), colour="red", alpha=0.2, shape=1) +
+  geom_point(aes(x=grnt, y=PSI.car-grnt), colour="black", alpha=0.2, shape=1) +
+  geom_hline(yintercept=0, linetype=3) +
+  facet_grid(LC~model) + labs(x="GRANIT", y="PSI-GRANIT")
+ggplot(filter(psi.df, !Train)) + xlim(0,1) + ylim(0,1) +
+  geom_point(aes(x=grnt, y=PSI.non), colour="red", alpha=0.2, shape=1) +
+  geom_point(aes(x=grnt, y=PSI.car), colour="black", alpha=0.2, shape=1) +
+  geom_abline(linetype=3) +
+  facet_grid(LC~model) + labs(x="GRANIT", y="PSI")
+
+
+psi.df %>% filter(!Train) %>% group_by(model) %>%
+  summarise(mnDiff.non=mean(abs(PSI.non-grnt)),
+            mnDiff.car=mean(abs(PSI.car-grnt)),
+            mdDiff.non=median(abs(PSI.non-grnt)),
+            mdDiff.car=median(abs(PSI.car-grnt)),
+            sumDiff.non=sum(abs(PSI.non-grnt)),
+            sumDiff.car=sum(abs(PSI.car-grnt))) %>%
+  arrange(sumDiff.car)
 
 # ggplot(psi.df) + geom_tile(aes(lon, lat, fill=PSI.car)) + facet_wrap(~LC) +
 #   scale_fill_viridis(limits=c(0,1))
@@ -176,7 +196,14 @@ write.csv(psi.df, paste0("out/psi_df_", res, ".csv"))
 #   scale_fill_gradient2(limits=c(-1,1))
 #
 #
-#
+lpd.car <- readRDS("out/lpd_car_2000ha.rds")
+lpd.non <- readRDS("out/lpd_non_2000ha.rds")
+lppd.car <- readRDS("out/lppd_car_2000ha.rds")
+lppd.non <- readRDS("out/lppd_non_2000ha.rds")
+psi.df <- read.csv("out/psi_df_2000ha.csv")
+
+
+
 #
 # 
 # 
